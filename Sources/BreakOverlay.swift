@@ -754,8 +754,12 @@ final class BreakOverlayManager {
         // ordered-in but invisible (issue #25). moveToActiveSpace makes the
         // order-front re-space it onto the user's current Space.
         panel.collectionBehavior.insert(.moveToActiveSpace)
-        panel.orderFrontRegardless()
+        // Fix a stale position BEFORE the panel becomes visible: the frame
+        // survives orderOut across breaks and display-topology changes, and
+        // the auto-pop shows it verbatim (issues #29/#30).
         repositionMenuPanelIfNeeded(panel)
+        enforceMenuBand(panel, context: "pin")
+        panel.orderFrontRegardless()
         // Every pin presents possibly-new content (alert card, break
         // countdown, summary): size reports from before this moment describe
         // the previous content and must not drive the repair.
@@ -994,6 +998,10 @@ final class BreakOverlayManager {
     /// anchored. Runs async so SwiftUI can commit the current phase's content
     /// first. Geometry-only: never touches the present/dismiss ledgers that
     /// the issue #25 repairs depend on, and never activates or takes focus.
+    /// Every exit enforces the menu band (issues #29/#30): the size logic may
+    /// rightfully leave the frame alone, but a drifted POSITION must never
+    /// survive a repair pass — top-anchoring to a wrong top edge just pins
+    /// the drift in place.
     private func repairMenuPanelFrame(_ panel: NSPanel, reason: String) {
         DispatchQueue.main.async { [weak self, weak panel] in
             guard let self, let panel else { return }
@@ -1006,6 +1014,7 @@ final class BreakOverlayManager {
                !self.sizesRoughlyEqual(base, f.size),
                self.lastRepairSetSize.map({ !self.sizesRoughlyEqual($0, f.size) }) ?? true {
                 Probe.log("repairFrame(\(reason)): system moved \(base) -> \(f.size), yielding")
+                self.enforceMenuBand(panel, context: "\(reason)/yield")
                 return
             }
             var size: CGSize?
@@ -1023,19 +1032,85 @@ final class BreakOverlayManager {
             }
             guard let fit = size, fit.height < 2000 else {
                 Probe.log("repairFrame(\(reason)): no usable measurement — leaving panel alone, frame=\(panel.frame)")
+                self.enforceMenuBand(panel, context: "\(reason)/noMeasure")
                 return
             }
             guard abs(f.height - fit.height) > 2 || abs(f.width - fit.width) > 2 else {
                 Probe.log("repairFrame(\(reason)): no-op [\(source)] delta ≤2pt, frame=\(f)")
+                self.enforceMenuBand(panel, context: "\(reason)/noop")
                 return
             }
             let topY = f.maxY
             f.size = NSSize(width: ceil(fit.width), height: ceil(fit.height))
             f.origin.y = topY - f.size.height
+            if let screen = self.menuAnchorScreen(for: panel),
+               let fixed = self.menuBandCorrection(for: f, on: screen) {
+                Probe.log("repairFrame(\(reason)): band correction \(f) -> \(fixed)")
+                f = fixed
+            }
             panel.setFrame(f, display: true)
             self.lastRepairSetSize = f.size
             Probe.log("repairFrame(\(reason)): setFrame -> \(f) [\(source)]")
         }
+    }
+
+    // MARK: - Menu band invariant (issues #29 / #30)
+    //
+    // An auto-popped menu panel must hang just below the menu bar of its
+    // anchor screen. The frame survives orderOut across breaks, Space moves,
+    // and display-topology changes, and NOTHING in the pinned flow ever
+    // corrected the position: the frame repair top-anchors to the CURRENT top
+    // (right or wrong), the system re-anchors only on its own presentations,
+    // and the off-screen rescue fired only when the panel intersected no
+    // screen at all. A frame carried over from another display therefore
+    // intrudes into the menu bar by exactly the bar-height difference
+    // (issue #30: on this dev setup laptop visibleFrame.maxY=949 vs external
+    // 982 — a 33pt intrusion) or floats mid-screen (issue #29 screenshot).
+    // Window-server probe 2026-07-24: on macOS 26 every system auto-pop
+    // resize is TOP-anchored (yTop constant across 253↔368↔396↔280), so an
+    // in-band frame stays in band — the check below is a no-op on every
+    // healthy path (issue #9 red line: zero setFrame when nothing is wrong).
+
+    /// The screen that should host the auto-popped panel: the screen holding
+    /// the status icon (live frame, else the last recorded system-panel
+    /// frame — iBar-proxied icons have no live frame), falling back to the
+    /// panel's own screen, then the mouse's.
+    private func menuAnchorScreen(for panel: NSPanel) -> NSScreen? {
+        for anchor in [statusItemIconFrame(), MenuPanelAnchor.lastFrame] {
+            if let a = anchor, let s = NSScreen.screens.first(where: { $0.frame.intersects(a) }) {
+                return s
+            }
+        }
+        return panel.screen ?? activeScreen()
+    }
+
+    /// Returns the in-band frame for `f`, or nil when `f` is already fine.
+    /// In band = top edge within 44pt below the screen's visibleFrame.maxY
+    /// (native gap measured at 2pt on macOS 26; 44 = menu-bar height + slack
+    /// so a legitimate system placement is never fought) and horizontally on
+    /// screen. Corrections use the same 4pt gap and anchor-centered x as the
+    /// dropdown-card layout in createFloating.
+    private func menuBandCorrection(for f: NSRect, on screen: NSScreen) -> NSRect? {
+        let vis = screen.visibleFrame
+        let topOK = f.maxY <= vis.maxY && f.maxY >= vis.maxY - 44
+        let xOK = f.minX >= vis.minX - 1 && f.maxX <= vis.maxX + 1
+        if topOK && xOK { return nil }
+        var out = f
+        out.origin.y = (vis.maxY - 4) - f.height
+        let anchorX = [statusItemIconFrame()?.midX, MenuPanelAnchor.lastFrame?.midX]
+            .compactMap { $0 }
+            .first { $0 > vis.minX && $0 < vis.maxX }
+        if let anchorX { out.origin.x = anchorX - f.width / 2 }
+        out.origin.x = min(max(out.origin.x, vis.minX + 8), vis.maxX - f.width - 8)
+        return out
+    }
+
+    /// Position-only band enforcement for paths that keep the panel's size.
+    private func enforceMenuBand(_ panel: NSPanel, context: String) {
+        guard let screen = menuAnchorScreen(for: panel),
+              let fixed = menuBandCorrection(for: panel.frame, on: screen) else { return }
+        Probe.log("enforceMenuBand(\(context)): \(panel.frame) -> \(fixed)")
+        panel.setFrame(fixed, display: true)
     }
 
     /// Measure MenuView's ideal size with a throwaway self-hosted
@@ -1100,6 +1175,36 @@ final class BreakOverlayManager {
     private func statusItemIconFrame() -> NSRect? {
         guard let w = StatusItemLocator.window, w.frame.width > 0 else { return nil }
         return w.frame
+    }
+
+    /// Dev-driver probe (healthtick.dev.dump): one-line snapshot of the
+    /// system panel's frame plus all three visibility ledgers (issue #30).
+    func probeDumpPanelFrame(context: String) {
+        guard let panel = findMenuBarPanel(includeHidden: true) else {
+            Probe.log("dump[\(context)]: panel nil")
+            return
+        }
+        Probe.log("dump[\(context)]: frame=\(panel.frame) visible=\(panel.isVisible) onSpace=\(panel.isOnActiveSpace) server=\(isOnScreenPerWindowServer(panel))")
+    }
+
+    /// Dev-driver fault injection (healthtick.dev.corruptLow/corruptHigh):
+    /// drag the system panel to a corrupted position so the band invariant
+    /// can be regression-tested end to end. "low" reproduces issue #29 (panel
+    /// adrift mid-screen), "high" reproduces issue #30 (top edge intruding
+    /// into the menu bar, as a frame carried over from a screen with a
+    /// higher visibleFrame.maxY would).
+    func probeCorruptPanelFrame(mode: String) {
+        guard let panel = findMenuBarPanel(includeHidden: true),
+              let screen = panel.screen ?? NSScreen.main else { return }
+        var f = panel.frame
+        let vis = screen.visibleFrame
+        if mode == "high" {
+            f.origin.y = (vis.maxY + 33) - f.height
+        } else {
+            f.origin = NSPoint(x: vis.midX - 200, y: vis.midY - f.height / 2)
+        }
+        Probe.log("corrupt(\(mode)): setFrame \(panel.frame) -> \(f)")
+        panel.setFrame(f, display: true)
     }
 
     /// Find the MenuBarExtra panel by searching app windows.

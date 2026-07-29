@@ -404,6 +404,7 @@ final class AppState {
 
         startQuietCheckTimer()
         setupShortcutMonitors()
+        setupDevDriver()
 
         refreshHolidayCalendarIfStale()
 
@@ -553,6 +554,51 @@ final class AppState {
             if dev > 0 { return dev }
         }
         return config.workMinutes * 60
+    }
+
+    /// Dev-build automation driver (probe investigations, issue #30): drives
+    /// phase transitions from a CLI harness — no UI clicks, no Accessibility
+    /// permission. Post a distributed notification from any local process:
+    ///   healthtick.dev.confirmBreak / healthtick.dev.confirmReturn /
+    ///   healthtick.dev.dump
+    /// Commands are phase-guarded so a dumb timed loop can post them
+    /// repeatedly. Release builds (no .dev suffix) never register.
+    private func setupDevDriver() {
+        guard Bundle.main.bundleIdentifier?.hasSuffix(".dev") == true else { return }
+        let center = DistributedNotificationCenter.default()
+        center.addObserver(forName: .init("healthtick.dev.confirmBreak"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.phase == .alerting else { return }
+                Probe.log("devDriver: confirmBreak")
+                self.confirmBreak()
+            }
+        }
+        center.addObserver(forName: .init("healthtick.dev.confirmReturn"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.phase == .waiting else { return }
+                Probe.log("devDriver: confirmReturn")
+                self.confirmReturn()
+            }
+        }
+        center.addObserver(forName: .init("healthtick.dev.dump"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.overlayManager.probeDumpPanelFrame(context: String(describing: self.phase))
+            }
+        }
+        for mode in ["low", "high"] {
+            center.addObserver(forName: .init("healthtick.dev.corrupt\(mode.capitalized)"), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.overlayManager.probeCorruptPanelFrame(mode: mode)
+                }
+            }
+        }
+        center.addObserver(forName: .init("healthtick.dev.reset"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                Probe.log("devDriver: reset")
+                self?.reset()
+            }
+        }
     }
 
     func startWork() {
