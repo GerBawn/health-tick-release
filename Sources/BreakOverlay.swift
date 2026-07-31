@@ -296,7 +296,10 @@ struct BreakCardView: View {
         if state.config.shortcutEnabled {
             Text(L.shortcutQuickConfirm(state.config.shortcutDisplay))
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary.opacity(0.6))
+                // Explicit white: the fullscreen card sits on the dark shield;
+                // semantic .secondary goes dark-gray in light appearance and
+                // disappears against it.
+                .foregroundStyle(.white.opacity(0.55))
         }
     }
 
@@ -400,7 +403,10 @@ struct BreakCardView: View {
         if state.config.shortcutEnabled {
             Text(L.shortcutQuickConfirm(state.config.shortcutDisplay))
                 .font(.system(size: 12))
-                .foregroundStyle(.secondary.opacity(0.6))
+                // Explicit white: the fullscreen card sits on the dark shield;
+                // semantic .secondary goes dark-gray in light appearance and
+                // disappears against it.
+                .foregroundStyle(.white.opacity(0.55))
         }
     }
 }
@@ -540,8 +546,21 @@ final class BreakOverlayManager {
         return NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
     }
 
+    /// The user's configured "specific display", if connected. A nil UUID
+    /// (config written before the issue #31 fix) resolves to screens.first —
+    /// the display the settings picker showed as selected. nil when the
+    /// target isn't `.specific` or the display is disconnected.
+    private func specificScreen() -> NSScreen? {
+        guard appState?.config.breakDisplayTarget == .specific else { return nil }
+        guard let uuid = appState?.config.breakDisplaySpecificUUID else {
+            Probe.log("specificScreen: uuid=nil (pre-#31 config) → screens.first")
+            return NSScreen.screens.first
+        }
+        return NSScreen.screens.first { $0.stableUUID == uuid }
+    }
+
     /// Returns the set of screens to overlay based on user's display-target config.
-    /// `.specific` with a missing/disconnected UUID silently falls back to active-screen behavior.
+    /// `.specific` with a disconnected UUID falls back to active-screen behavior.
     private func targetScreens() -> [NSScreen] {
         let target = appState?.config.breakDisplayTarget ?? .activeScreen
         switch target {
@@ -550,10 +569,8 @@ final class BreakOverlayManager {
         case .allScreens:
             return NSScreen.screens
         case .specific:
-            if let uuid = appState?.config.breakDisplaySpecificUUID,
-               let s = NSScreen.screens.first(where: { $0.stableUUID == uuid }) {
-                return [s]
-            }
+            if let s = specificScreen() { return [s] }
+            Probe.log("targetScreens .specific: configured display not connected → activeScreen fallback")
             return [activeScreen()].compactMap { $0 }
         }
     }
@@ -585,6 +602,11 @@ final class BreakOverlayManager {
 
     /// Break countdown in menuWindow mode: keep the pinned system panel and
     /// let MenuView morph in place; the frame repair runs on each appear.
+    /// NOTE: menuWindow mode intentionally ignores breakDisplayTarget — the
+    /// dropdown is the status bar's extension and lives where the icon is
+    /// (issue #31 follow-up: the system owns the panel's frame; a
+    /// cross-display setFrame is silently reverted, probe 2026-07-31). The
+    /// settings hide the screen picker in this mode.
     func showMenuBreak(seconds: Int) {
         remaining = seconds
         pinMenuPanel()
@@ -1411,7 +1433,10 @@ final class BreakOverlayManager {
             .environment(state)
 
             let hostingView = NSHostingView(rootView: fullscreenView)
-            hostingView.frame = frame
+            // Window-local coordinates: screen.frame's global origin is
+            // non-zero on secondary displays and would shift the content
+            // clean out of the panel (issue #31 follow-up).
+            hostingView.frame = NSRect(origin: .zero, size: frame.size)
             hostingView.autoresizingMask = [.width, .height]
             p.contentView!.addSubview(hostingView)
 

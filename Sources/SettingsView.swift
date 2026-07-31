@@ -53,12 +53,33 @@ struct SettingsView: View {
 
 private let systemSounds = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"]
 
-private func toggleRow(icon: String, label: String, isOn: Binding<Bool>) -> some View {
+/// macOS System Settings-style icon chip: white symbol on a colored
+/// rounded square. All rows share this so icon sizes/insets line up.
+private func settingIcon(_ systemName: String, _ color: Color) -> some View {
+    Image(systemName: systemName)
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(.white)
+        .frame(width: 24, height: 24)
+        .background(color.gradient, in: RoundedRectangle(cornerRadius: 6))
+}
+
+/// Caption header above a settings card.
+private func sectionHeader(_ title: String) -> some View {
+    Text(title)
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 10)
+        .padding(.bottom, -4)
+}
+
+/// Text/sub-row leading inset that clears the icon chip
+/// (14 h-padding + 24 chip + 10 spacing).
+private let rowContentInset: CGFloat = 48
+
+private func toggleRow(icon: String, color: Color, label: String, isOn: Binding<Bool>) -> some View {
     HStack(spacing: 10) {
-        Image(systemName: icon)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .frame(width: 20)
+        settingIcon(icon, color)
         Text(label)
             .font(.callout)
         Spacer()
@@ -68,15 +89,12 @@ private func toggleRow(icon: String, label: String, isOn: Binding<Bool>) -> some
             .tint(.green)
     }
     .padding(.horizontal, 14)
-    .padding(.vertical, 6)
+    .padding(.vertical, 7)
 }
 
-private func pickerRow<P: View>(icon: String, label: String, @ViewBuilder picker: () -> P) -> some View {
+private func pickerRow<P: View>(icon: String, color: Color, label: String, @ViewBuilder picker: () -> P) -> some View {
     HStack(spacing: 10) {
-        Image(systemName: icon)
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .frame(width: 20)
+        settingIcon(icon, color)
         Text(label)
             .font(.callout)
         Spacer()
@@ -84,7 +102,7 @@ private func pickerRow<P: View>(icon: String, label: String, @ViewBuilder picker
             .fixedSize()
     }
     .padding(.horizontal, 14)
-    .padding(.vertical, 6)
+    .padding(.vertical, 7)
 }
 
 private func dateFromHHmm(_ str: String) -> Date {
@@ -120,14 +138,16 @@ struct SystemTab: View {
     @State private var resetSettingsDone = false
     @State private var resetDataDone = false
     @State private var exportDone = false
+    @State private var showShortcutHelp = false
 
     var body: some View {
 
         @Bindable var state = state
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 12) {
+            sectionHeader(L.sectionApp)
             VStack(spacing: 0) {
-                pickerRow(icon: "globe", label: L.language) {
+                pickerRow(icon: "globe", color: .blue, label: L.language) {
                     Picker("", selection: $state.config.language) {
                         ForEach(AppLanguage.allCases, id: \.self) { lang in
                             Text(lang.displayName).tag(lang)
@@ -135,8 +155,8 @@ struct SystemTab: View {
                     }
                     .labelsHidden()
                 }
-                Divider().padding(.leading, 44)
-                pickerRow(icon: "circle.lefthalf.filled", label: L.appearance) {
+                Divider().padding(.leading, rowContentInset)
+                pickerRow(icon: "circle.lefthalf.filled", color: .indigo, label: L.appearance) {
                     Picker("", selection: $state.config.appearance) {
                         ForEach(AppAppearance.allCases, id: \.self) { a in
                             Text(a.label).tag(a)
@@ -144,30 +164,35 @@ struct SystemTab: View {
                     }
                     .labelsHidden()
                 }
-                Divider().padding(.leading, 44)
-                toggleRow(icon: "power", label: L.launchAtLogin, isOn: Binding(
+                Divider().padding(.leading, rowContentInset)
+                toggleRow(icon: "power", color: .green, label: L.launchAtLogin, isOn: Binding(
                     get: { SMAppService.mainApp.status == .enabled },
                     set: { enable in
                         try? enable ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
                     }
                 ))
-                Divider().padding(.leading, 44)
-                toggleRow(icon: "arrow.triangle.2.circlepath", label: L.autoCheckUpdate, isOn: $state.config.autoCheckUpdate)
-                Divider().padding(.leading, 44)
+                Divider().padding(.leading, rowContentInset)
+                toggleRow(icon: "arrow.triangle.2.circlepath", color: .teal, label: L.autoCheckUpdate, isOn: $state.config.autoCheckUpdate)
+                Divider().padding(.leading, rowContentInset)
                 VStack(alignment: .leading, spacing: 2) {
-                    toggleRow(icon: "lock.display", label: L.resetOnScreenLock, isOn: $state.config.resetOnScreenLock)
+                    toggleRow(icon: "lock.display", color: .orange, label: L.resetOnScreenLock, isOn: $state.config.resetOnScreenLock)
                     Text(L.resetOnScreenLockHint)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.leading, 46)
-                        .padding(.bottom, 4)
+                        .padding(.leading, rowContentInset)
+                        .padding(.bottom, 6)
                 }
-                Divider().padding(.leading, 44)
+                Divider().padding(.leading, rowContentInset)
+                shortcutRow
+            }
+            .padding(.vertical, 4)
+            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+
+            sectionHeader(L.sectionData)
+                .padding(.top, 8)
+            VStack(spacing: 0) {
                 HStack(spacing: 10) {
-                    Image(systemName: "wand.and.stars")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20)
+                    settingIcon("wand.and.stars", .pink)
                     Text(L.reopenOnboarding)
                         .font(.callout)
                     Spacer()
@@ -190,12 +215,9 @@ struct SystemTab: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                Divider().padding(.leading, 44)
+                Divider().padding(.leading, rowContentInset)
                 HStack(spacing: 10) {
-                    Image(systemName: "arrow.counterclockwise")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20)
+                    settingIcon("arrow.counterclockwise", .orange)
                     Text(L.resetSettings)
                         .font(.callout)
                     Spacer()
@@ -225,12 +247,9 @@ struct SystemTab: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                Divider().padding(.leading, 44)
+                Divider().padding(.leading, rowContentInset)
                 HStack(spacing: 10) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20)
+                    settingIcon("square.and.arrow.up", .blue)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(L.exportData)
                             .font(.callout)
@@ -259,12 +278,9 @@ struct SystemTab: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 6)
-                Divider().padding(.leading, 44)
+                Divider().padding(.leading, rowContentInset)
                 HStack(spacing: 10) {
-                    Image(systemName: "trash")
-                        .font(.callout)
-                        .foregroundStyle(.red.opacity(0.7))
-                        .frame(width: 20)
+                    settingIcon("trash", .red)
                     Text(L.resetAllData)
                         .font(.callout)
                     Spacer()
@@ -301,6 +317,43 @@ struct SystemTab: View {
             }
             .padding(16)
         }
+    }
+
+    @ViewBuilder
+    private var shortcutRow: some View {
+        @Bindable var state = state
+        HStack(spacing: 10) {
+            settingIcon("keyboard.fill", .purple)
+            Text(L.shortcutLabel)
+                .font(.callout)
+            Button {
+                showShortcutHelp.toggle()
+            } label: {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+            }
+            .buttonStyle(.borderless)
+            .popover(isPresented: $showShortcutHelp) {
+                Text(L.shortcutHint)
+                    .font(.callout)
+                    .padding(12)
+                    .frame(width: 260)
+            }
+            Spacer()
+            if state.config.shortcutEnabled {
+                ShortcutRecorderView(
+                    keyCode: $state.config.shortcutKeyCode,
+                    modifiers: $state.config.shortcutModifiers
+                )
+            }
+            Toggle("", isOn: $state.config.shortcutEnabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(.green)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
     }
 
     private func confirmReset(title: String, message: String, action: @escaping () -> Void) {
@@ -383,6 +436,7 @@ struct AppTab: View {
         @Bindable var state = state
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 12) {
+                sectionHeader(L.sectionRhythm)
                 // Timer sliders
                 VStack(spacing: 16) {
                     sliderRow(icon: "deskclock.fill", label: L.workDuration, value: Binding(
@@ -394,7 +448,7 @@ struct AppTab: View {
 
                     VStack(spacing: 4) {
                         HStack {
-                            Image(systemName: "cup.and.saucer.fill").font(.callout).foregroundStyle(.orange).frame(width: 20)
+                            settingIcon("cup.and.saucer.fill", .orange)
                             Text(L.breakDuration).font(.callout)
                             Spacer()
                             Text(L.formatBreakDuration(state.config.breakSeconds))
@@ -415,12 +469,25 @@ struct AppTab: View {
                         set: { state.config.dailyGoal = Int($0) }
                     ), range: 1...20, unit: L.unitTimes, color: .blue)
 
+                    // Rides with the daily-goal slider: what happens when the
+                    // goal is reached.
+                    HStack(spacing: 10) {
+                        settingIcon("flag.checkered", .blue)
+                        Text(L.autoPauseOnGoal)
+                            .font(.callout)
+                        Spacer()
+                        Toggle("", isOn: $state.config.autoPauseOnGoal)
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .tint(.green)
+                    }
+
                     Divider().padding(.vertical, 4)
 
                     // Long Break
                     VStack(spacing: 4) {
                         HStack {
-                            Image(systemName: "cup.and.saucer").font(.callout).foregroundStyle(.purple).frame(width: 20)
+                            settingIcon("cup.and.saucer", .purple)
                             Text(L.longBreak).font(.callout)
                             Spacer()
                             Toggle("", isOn: Binding(
@@ -485,7 +552,7 @@ struct AppTab: View {
 
                     VStack(spacing: 4) {
                         HStack {
-                            Image(systemName: "eye").font(.callout).foregroundStyle(.cyan).frame(width: 20)
+                            settingIcon("eye", .cyan)
                             Text(L.eyeCareMode).font(.callout)
                             Spacer()
                             Toggle("", isOn: Binding(
@@ -523,15 +590,14 @@ struct AppTab: View {
                 .padding(.vertical, 14)
                 .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
 
+                sectionHeader(L.sectionSchedule)
+                    .padding(.top, 8)
                 // Work Days + Work Hours + Quiet Hours
                 VStack(spacing: 0) {
                     // Work Days
                     VStack(spacing: 8) {
                         HStack(spacing: 10) {
-                            Image(systemName: "calendar")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
+                            settingIcon("calendar", .green)
                             Text(L.workDays)
                                 .font(.callout)
                             Spacer()
@@ -539,10 +605,7 @@ struct AppTab: View {
                         .padding(.horizontal, 14)
 
                         HStack(spacing: 10) {
-                            Image(systemName: "flag.fill")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
+                            settingIcon("flag.fill", .red)
                             Text(L.holidaySync)
                                 .font(.callout)
                             Spacer()
@@ -566,7 +629,7 @@ struct AppTab: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 44)
+                                .padding(.leading, rowContentInset)
                                 .padding(.trailing, 14)
 
                             HStack(spacing: 8) {
@@ -608,7 +671,7 @@ struct AppTab: View {
                                 }
                                 Spacer()
                             }
-                            .padding(.leading, 44)
+                            .padding(.leading, rowContentInset)
                             .padding(.trailing, 14)
 
                             if let holidaySyncError {
@@ -616,7 +679,7 @@ struct AppTab: View {
                                     .font(.caption)
                                     .foregroundStyle(.red)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.leading, 44)
+                                    .padding(.leading, rowContentInset)
                                     .padding(.trailing, 14)
                             }
 
@@ -624,7 +687,7 @@ struct AppTab: View {
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 44)
+                                .padding(.leading, rowContentInset)
                                 .padding(.trailing, 14)
                         }
 
@@ -649,21 +712,18 @@ struct AppTab: View {
                                 .buttonStyle(.borderless)
                             }
                         }
-                        .padding(.leading, 44)
+                        .padding(.leading, rowContentInset)
                         .padding(.trailing, 14)
                         .opacity(state.config.holidaySyncEnabled ? 0.85 : 1)
                     }
                     .padding(.vertical, 10)
 
-                    Divider().padding(.leading, 44)
+                    Divider().padding(.leading, rowContentInset)
 
                     // Work Hours
                     VStack(spacing: 8) {
                         HStack(spacing: 10) {
-                            Image(systemName: "clock.fill")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 20)
+                            settingIcon("clock.fill", .teal)
                             Text(L.workHoursLabel)
                                 .font(.callout)
                             Button {
@@ -710,7 +770,7 @@ struct AppTab: View {
 
                                 Spacer()
                             }
-                            .padding(.leading, 44)
+                            .padding(.leading, rowContentInset)
                             .padding(.trailing, 14)
 
                             HStack(spacing: 6) {
@@ -737,21 +797,18 @@ struct AppTab: View {
                                     .toggleStyle(.switch)
                                     .tint(.green)
                             }
-                            .padding(.leading, 44)
+                            .padding(.leading, rowContentInset)
                             .padding(.trailing, 14)
                         }
                     }
                     .padding(.vertical, 4)
 
-                    Divider().padding(.leading, 44)
+                    Divider().padding(.leading, rowContentInset)
 
                     // Quiet Hours
                     VStack(spacing: 8) {
                         HStack(spacing: 10) {
-                            Image(systemName: "moon.fill")
-                                .font(.callout)
-                                .foregroundStyle(.purple)
-                                .frame(width: 20)
+                            settingIcon("moon.fill", .purple)
                             Text(L.quietHours)
                                 .font(.callout)
                             Button {
@@ -796,7 +853,7 @@ struct AppTab: View {
                                     state.config.quietHours.removeAll { $0.id == periodId }
                                 }
                             )
-                            .padding(.leading, 44)
+                            .padding(.leading, rowContentInset)
                             .padding(.trailing, 14)
                         }
                     }
@@ -865,7 +922,7 @@ struct AppTab: View {
     private func sliderRow(icon: String, label: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String, color: Color) -> some View {
         VStack(spacing: 4) {
             HStack {
-                Image(systemName: icon).font(.callout).foregroundStyle(color).frame(width: 20)
+                settingIcon(icon, color)
                 Text(label).font(.callout)
                 Spacer()
                 Text("\(Int(value.wrappedValue)) \(unit)")
@@ -884,13 +941,13 @@ struct AppTab: View {
 
 struct BreakTab: View {
     @Environment(AppState.self) var state
-    @State private var showShortcutHelp = false
 
     var body: some View {
         @Bindable var state = state
         VStack(spacing: 12) {
+            sectionHeader(L.sectionBreakWindow)
             VStack(spacing: 0) {
-                pickerRow(icon: "rectangle.inset.filled", label: L.breakWindow) {
+                pickerRow(icon: "rectangle.inset.filled", color: .orange, label: L.breakWindow) {
                     Picker("", selection: $state.config.breakPosition) {
                         ForEach(BreakPosition.allCases, id: \.self) { pos in
                             Text(pos.label).tag(pos)
@@ -906,31 +963,25 @@ struct BreakTab: View {
                     }
                     .buttonStyle(.borderless)
                 }
-                Divider().padding(.leading, 44)
-                displayTargetRow
-                Divider().padding(.leading, 44)
-                toggleRow(icon: "hand.raised.fill", label: L.breakConfirm, isOn: $state.config.breakConfirm)
+                // menuWindow mode: the reminder is the status-bar dropdown —
+                // it lives where the icon is, a screen choice can't apply.
+                if state.config.breakPosition != .menuWindow {
+                    Divider().padding(.leading, rowContentInset)
+                    displayTargetRow
+                }
+                Divider().padding(.leading, rowContentInset)
+                toggleRow(icon: "hand.raised.fill", color: .green, label: L.breakConfirm, isOn: $state.config.breakConfirm)
                     .opacity(state.config.eyeCareMode ? 0.5 : 1.0)
                     .disabled(state.config.eyeCareMode)
-                Divider().padding(.leading, 44)
-                toggleRow(icon: "flag.checkered", label: L.autoPauseOnGoal, isOn: $state.config.autoPauseOnGoal)
-                Divider().padding(.leading, 44)
+                Divider().padding(.leading, rowContentInset)
                 soundRow(
-                    icon: "speaker.wave.2.fill",
-                    label: L.reminderSound,
-                    isOn: $state.config.soundEnabled,
-                    sound: $state.config.alertSound,
-                    repeatCount: $state.config.alertSoundRepeatCount
-                )
-                Divider().padding(.leading, 44)
-                soundRow(
+                    state: state,
                     icon: "ear.fill",
+                    color: .teal,
                     label: L.activityDetectSound,
                     isOn: $state.config.breakDetectSound,
                     sound: $state.config.breakDetectSoundName
                 )
-                Divider().padding(.leading, 44)
-                shortcutRow
             }
             .padding(.vertical, 4)
             .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
@@ -941,24 +992,14 @@ struct BreakTab: View {
     @ViewBuilder
     private var displayTargetRow: some View {
         @Bindable var state = state
-        // macOS MenuBarExtra is a system singleton — "all displays" can't be
-        // honored in menu mode, so hide that option there.
-        let isMenuMode = state.config.breakPosition == .menuWindow
-        let availableTargets: [BreakDisplayTarget] = isMenuMode
-            ? [.activeScreen, .specific]
-            : BreakDisplayTarget.allCases
-
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "display.2")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
+                settingIcon("display.2", .blue)
                 Text(L.displayTargetLabel)
                     .font(.callout)
                 Spacer()
                 Picker("", selection: $state.config.breakDisplayTarget) {
-                    ForEach(availableTargets, id: \.self) { t in
+                    ForEach(BreakDisplayTarget.allCases, id: \.self) { t in
                         Text(t.label).tag(t)
                     }
                 }
@@ -974,16 +1015,22 @@ struct BreakTab: View {
                     .padding(.bottom, 6)
             }
         }
-        .onChange(of: state.config.breakPosition) { _, newPos in
-            // Switching INTO menu mode while "all" is selected → coerce to active
-            if newPos == .menuWindow && state.config.breakDisplayTarget == .allScreens {
-                state.config.breakDisplayTarget = .activeScreen
+        .onChange(of: state.config.breakDisplayTarget) { _, newTarget in
+            // Picking "specific" must persist a display right away: the
+            // sub-picker's binding only fires on an actual selection change,
+            // so the default it *displays* (screens.first) would otherwise
+            // never be written and reminders silently fall back to the
+            // active screen (issue #31).
+            if newTarget == .specific && state.config.breakDisplaySpecificUUID == nil {
+                state.config.breakDisplaySpecificUUID = NSScreen.screens.first?.stableUUID
             }
         }
         .onAppear {
-            // Repair any pre-existing invalid combo from earlier versions / DB
-            if isMenuMode && state.config.breakDisplayTarget == .allScreens {
-                state.config.breakDisplayTarget = .activeScreen
+            // Heal DBs written before the issue #31 fix: "specific" selected
+            // but no display UUID ever persisted.
+            if state.config.breakDisplayTarget == .specific
+                && state.config.breakDisplaySpecificUUID == nil {
+                state.config.breakDisplaySpecificUUID = NSScreen.screens.first?.stableUUID
             }
         }
     }
@@ -1021,59 +1068,21 @@ struct BreakTab: View {
         return name.isEmpty ? L.displayTargetUnknownName : name
     }
 
-    @ViewBuilder
-    private var shortcutRow: some View {
-        @Bindable var state = state
-        HStack(spacing: 10) {
-            Image(systemName: "keyboard.fill")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .frame(width: 20)
-            Text(L.shortcutLabel)
-                .font(.callout)
-            Button {
-                showShortcutHelp.toggle()
-            } label: {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.tertiary)
-            }
-            .buttonStyle(.borderless)
-            .popover(isPresented: $showShortcutHelp) {
-                Text(L.shortcutHint)
-                    .font(.callout)
-                    .padding(12)
-                    .frame(width: 260)
-            }
-            Spacer()
-            if state.config.shortcutEnabled {
-                ShortcutRecorderView(
-                    keyCode: $state.config.shortcutKeyCode,
-                    modifiers: $state.config.shortcutModifiers
-                )
-            }
-            Toggle("", isOn: $state.config.shortcutEnabled)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .tint(.green)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 6)
-    }
+}
 
-    private func soundRow(
-        icon: String,
-        label: String,
-        isOn: Binding<Bool>,
-        sound: Binding<String>,
-        repeatCount: Binding<Int>? = nil
-    ) -> some View {
+/// Shared by BreakTab (activity-detect sound) and SystemTab (reminder sound).
+private func soundRow(
+    state: AppState,
+    icon: String,
+    color: Color,
+    label: String,
+    isOn: Binding<Bool>,
+    sound: Binding<String>,
+    repeatCount: Binding<Int>? = nil
+) -> some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: icon)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20)
+                settingIcon(icon, color)
                 Text(label)
                     .font(.callout)
                 Spacer()
@@ -1083,11 +1092,11 @@ struct BreakTab: View {
                     .tint(.green)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 6)
+            .padding(.vertical, 7)
 
             if isOn.wrappedValue {
                 HStack(spacing: 10) {
-                    Spacer().frame(width: 20)
+                    Spacer().frame(width: 24)
                     Picker("", selection: sound) {
                         ForEach(systemSounds, id: \.self) { s in
                             Text(s).tag(s)
@@ -1098,7 +1107,7 @@ struct BreakTab: View {
 
                     Button {
                         if let repeatCount {
-                            self.state.previewSoundBurst(
+                            state.previewSoundBurst(
                                 soundName: sound.wrappedValue,
                                 repeatCount: repeatCount.wrappedValue
                             )
@@ -1120,7 +1129,7 @@ struct BreakTab: View {
 
                 if let repeatCount {
                     HStack(spacing: 10) {
-                        Spacer().frame(width: 20)
+                        Spacer().frame(width: 24)
                         Text(L.alertSoundRepeatCount)
                             .font(.callout)
                             .foregroundStyle(.secondary)
@@ -1137,7 +1146,6 @@ struct BreakTab: View {
                 }
             }
         }
-    }
 }
 
 // MARK: - Reminders
@@ -1149,14 +1157,33 @@ struct ReminderTab: View {
     @State private var editingText = ""
 
     var body: some View {
+        @Bindable var state = state
 
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
+            sectionHeader(L.sectionAlertStyle)
+            VStack(spacing: 0) {
+                soundRow(
+                    state: state,
+                    icon: "speaker.wave.2.fill",
+                    color: .orange,
+                    label: L.reminderSound,
+                    isOn: $state.config.soundEnabled,
+                    sound: $state.config.alertSound,
+                    repeatCount: $state.config.alertSoundRepeatCount
+                )
+            }
+            .padding(.vertical, 4)
+            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+
+            sectionHeader(L.sectionReminderTexts)
+                .padding(.top, 8)
             HStack {
                 Text(L.reminderHint)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                 Spacer()
             }
+            .padding(.leading, 10)
 
             VStack(spacing: 0) {
                 ForEach(Array(state.config.reminders.enumerated()), id: \.offset) { i, reminder in

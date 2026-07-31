@@ -284,7 +284,9 @@ final class AppState {
     var config: AppConfig {
         didSet { scheduleAutoSave() }
     }
-    var phase: AppPhase = .working
+    var phase: AppPhase = .working {
+        didSet { setupShortcutMonitors() }
+    }
     var remainingSeconds: Int = 0
     var todayDone: Int = 0
     var currentStreak: Int = 0
@@ -364,7 +366,7 @@ final class AppState {
     private var autoSaveTimer: Timer?
     private var restartPromptTimer: Timer?
     private var lastSavedConfig: AppConfig?
-    private var localMonitor: Any?
+    private let quickConfirmHotKey = QuickConfirmHotKey()
     private var screenLockTime: Date?
 
     var earnedTotalBadges: [Badge] {
@@ -1467,22 +1469,22 @@ final class AppState {
 
     // MARK: - Keyboard Shortcut
 
+    /// (Re)evaluate the system-wide quick-confirm hotkey. Registered ONLY
+    /// while a confirmable phase is up: reminders never take keyboard focus
+    /// (issue #24), so an in-process monitor missed every keypress typed at
+    /// the frontmost app — the hotkey works focus-free, and scoping it to
+    /// alerting/waiting keeps the combo usable by other apps the rest of
+    /// the time.
     func setupShortcutMonitors() {
-        if let m = localMonitor { NSEvent.removeMonitor(m); localMonitor = nil }
-        guard config.shortcutEnabled else { return }
-
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self else { return event }
-            let targetMods = NSEvent.ModifierFlags(rawValue: self.config.shortcutModifiers)
-                .intersection([.command, .option, .shift, .control])
-            let eventMods = event.modifierFlags.intersection([.command, .option, .shift, .control])
-            guard event.keyCode == self.config.shortcutKeyCode && eventMods == targetMods else { return event }
-            if self.phase == .alerting || self.phase == .waiting {
-                self.handleShortcutAction()
-                return nil  // consume the event
-            }
-            return event
+        guard config.shortcutEnabled, phase == .alerting || phase == .waiting, !isPreview else {
+            quickConfirmHotKey.unregister()
+            return
         }
+        quickConfirmHotKey.register(
+            keyCode: config.shortcutKeyCode,
+            modifiers: NSEvent.ModifierFlags(rawValue: config.shortcutModifiers),
+            action: { [weak self] in self?.handleShortcutAction() }
+        )
     }
 
     private func handleShortcutAction() {

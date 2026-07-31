@@ -104,6 +104,15 @@ struct L {
     static var tabReminders: String { isZh ? "提醒" : "Reminders" }
     static var tabAbout: String { isZh ? "关于" : "About" }
 
+    // MARK: - Settings - Section headers
+    static var sectionApp: String { isZh ? "应用" : "Application" }
+    static var sectionData: String { isZh ? "数据与维护" : "Data & Maintenance" }
+    static var sectionRhythm: String { isZh ? "计时节奏" : "Timer Rhythm" }
+    static var sectionSchedule: String { isZh ? "工作日程" : "Work Schedule" }
+    static var sectionBreakWindow: String { isZh ? "休息窗口" : "Break Window" }
+    static var sectionAlertStyle: String { isZh ? "提醒方式" : "Alert Style" }
+    static var sectionReminderTexts: String { isZh ? "提醒文案" : "Reminder Messages" }
+
     // MARK: - Settings - General
     static var workDuration: String { isZh ? "工作时长" : "Work Duration" }
     static var breakDuration: String { isZh ? "休息时长" : "Break Duration" }

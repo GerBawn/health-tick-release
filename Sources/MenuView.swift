@@ -153,6 +153,12 @@ private struct MenuTimerCircle: View {
         let total: Int
         if state.phase == .working || (state.phase == .paused && state.remainingSeconds > 0) {
             total = state.config.workMinutes * 60
+        } else if state.phase == .breaking {
+            // Floating/fullscreen users see this circle when they open the
+            // menu mid-break (menuWindow users get BreakCardView instead).
+            // Divide by the break actually in progress (may be a long
+            // break), not the fixed normal-break setting (issue #28).
+            total = state.currentBreakTotalSeconds
         } else {
             return 0
         }
