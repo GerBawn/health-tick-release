@@ -1,6 +1,7 @@
 import SwiftUI
 import ServiceManagement
 import AppKit
+import Combine
 
 private enum SettingsTab: Hashable {
     case system, app, breakTab, reminders, about
@@ -139,6 +140,13 @@ struct SystemTab: View {
     @State private var resetDataDone = false
     @State private var exportDone = false
     @State private var showShortcutHelp = false
+    // 开机自启开关的唯一事实源：SMAppService 状态不可观察，必须镜像到 @State
+    // 驱动渲染，否则 NSSwitch 视觉状态会在重渲染间隙漂移（issue #32）
+    @State private var launchStatus = SMAppService.mainApp.status
+
+    private func refreshLaunchStatus() {
+        launchStatus = SMAppService.mainApp.status
+    }
 
     var body: some View {
 
@@ -165,12 +173,36 @@ struct SystemTab: View {
                     .labelsHidden()
                 }
                 Divider().padding(.leading, rowContentInset)
-                toggleRow(icon: "power", color: .green, label: L.launchAtLogin, isOn: Binding(
-                    get: { SMAppService.mainApp.status == .enabled },
-                    set: { enable in
-                        try? enable ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
+                VStack(alignment: .leading, spacing: 2) {
+                    toggleRow(icon: "power", color: .green, label: L.launchAtLogin, isOn: Binding(
+                        get: { launchStatus == .enabled },
+                        set: { enable in
+                            do {
+                                if enable {
+                                    try SMAppService.mainApp.register()
+                                } else {
+                                    try SMAppService.mainApp.unregister()
+                                }
+                            } catch {
+                                NSLog("HealthTick: launch at login toggle failed: %@", String(describing: error))
+                            }
+                            refreshLaunchStatus()
+                        }
+                    ))
+                    if launchStatus == .requiresApproval {
+                        Button {
+                            SMAppService.openSystemSettingsLoginItems()
+                        } label: {
+                            Text(L.launchAtLoginNeedsApproval)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                        .buttonStyle(.plain)
+                        .handCursor()
+                        .padding(.leading, rowContentInset)
+                        .padding(.bottom, 6)
                     }
-                ))
+                }
                 Divider().padding(.leading, rowContentInset)
                 toggleRow(icon: "arrow.triangle.2.circlepath", color: .teal, label: L.autoCheckUpdate, isOn: $state.config.autoCheckUpdate)
                 Divider().padding(.leading, rowContentInset)
@@ -316,6 +348,10 @@ struct SystemTab: View {
             .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
             }
             .padding(16)
+        }
+        // 覆盖「用户在系统设置里手动改过登录项」的场景：回到 app 时同步真实状态
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            refreshLaunchStatus()
         }
     }
 
