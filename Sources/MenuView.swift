@@ -396,6 +396,7 @@ private struct MenuStatsContent: View {
                     .background(.blue.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.borderless)
+                .handCursor()
             }
         }
     }

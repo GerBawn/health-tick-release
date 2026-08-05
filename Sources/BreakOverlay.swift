@@ -21,6 +21,9 @@ struct BreakCardView: View {
     @Environment(AppState.self) var state
     var fullscreen: Bool = false
 
+    /// Hover state for the alert's secondary action ("skip this break").
+    @State private var skipHovering = false
+
     private var timerProgress: Double {
         guard state.phase == .breaking else { return 0 }
         // Divide by the break actually in progress (may be a long break),
@@ -54,6 +57,69 @@ struct BreakCardView: View {
             }
             .frame(width: 240)
         }
+    }
+
+    // MARK: - Shared Controls
+
+    /// Primary confirm button for the alerting / waiting phases. The keyboard
+    /// shortcut rides inside it as a badge: as a separate gray line below it
+    /// read as body copy (and sat right next to the secondary action, making
+    /// that one look like caption text too).
+    @ViewBuilder
+    private func primaryActionButton(_ title: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: fullscreen ? 18 : 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: fullscreen ? 280 : .infinity)
+                .padding(.vertical, fullscreen ? 12 : 10)
+                // Trailing overlay, not an HStack member: the title stays
+                // optically centered in the button (an inline badge shoved it
+                // off-center) and the key sits where macOS puts shortcuts.
+                .overlay(alignment: .trailing) {
+                    if state.config.shortcutEnabled {
+                        Text(state.config.shortcutDisplay)
+                            .font(.system(size: fullscreen ? 14 : 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .padding(.trailing, fullscreen ? 16 : 12)
+                    }
+                }
+                .background(color.gradient, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .handCursor()
+    }
+
+    /// Secondary action pill (currently "skip this break"): soft tonal fill,
+    /// narrower and lighter than the primary so the two never read as twins.
+    /// On the fullscreen shield it must use explicit whites — semantic colors
+    /// render near-black in light appearance and vanish there (issue #31).
+    @ViewBuilder
+    private func secondaryActionButton(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                // Says what the user is choosing instead of resting, which
+                // reads faster than a skip glyph. Deliberately not ✍️ (already
+                // the menu's "worked today" marker); 🧑‍💻 is the gender-neutral
+                // technologist — not 👨‍💻/👩‍💻, which carry a gender.
+                Text("🧑‍💻")
+                    .font(.system(size: fullscreen ? 13 : 11))
+                Text(title)
+                    .font(.system(size: fullscreen ? 14 : 12, weight: .medium))
+            }
+            .foregroundStyle(fullscreen
+                ? AnyShapeStyle(.white.opacity(skipHovering ? 0.95 : 0.72))
+                : AnyShapeStyle(.primary.opacity(skipHovering ? 0.9 : 0.68)))
+            .padding(.horizontal, fullscreen ? 22 : 16)
+            .padding(.vertical, fullscreen ? 8 : 6)
+            .background(Capsule().fill(fullscreen
+                ? AnyShapeStyle(.white.opacity(skipHovering ? 0.22 : 0.14))
+                : AnyShapeStyle(.primary.opacity(skipHovering ? 0.16 : 0.10))))
+        }
+        .buttonStyle(.plain)
+        .handCursor()
+        .onHover { skipHovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: skipHovering)
     }
 
     // MARK: - Off-Work Summary (shares the break popup rendering path)
@@ -96,6 +162,7 @@ struct BreakCardView: View {
                     .background(.orange.gradient, in: RoundedRectangle(cornerRadius: 10))
             }
             .buttonStyle(.borderless)
+            .handCursor()
             .padding(.horizontal, 24)
             .padding(.top, 16)
 
@@ -122,26 +189,16 @@ struct BreakCardView: View {
                 .padding(.top, 10)
         }
 
-        Button {
+        primaryActionButton(L.alertConfirmBreak, color: .orange) {
             state.confirmBreak()
-        } label: {
-            Text(L.alertConfirmBreak)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(.orange.gradient, in: RoundedRectangle(cornerRadius: 10))
         }
-        .buttonStyle(.borderless)
         .padding(.horizontal, 24)
         .padding(.top, 16)
 
-        if state.config.shortcutEnabled {
-            Text(L.shortcutQuickConfirm(state.config.shortcutDisplay))
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary.opacity(0.5))
-                .padding(.top, 6)
+        secondaryActionButton(L.alertSkipBreak) {
+            state.skipBreakFromAlert()
         }
+        .padding(.top, 12)
 
         Spacer().frame(height: 24)
     }
@@ -220,6 +277,7 @@ struct BreakCardView: View {
         }
         .disabled(state.isPreview)
         .buttonStyle(.borderless)
+        .handCursor()
         .padding(.top, 14)
 
         Spacer().frame(height: 10)
@@ -241,26 +299,11 @@ struct BreakCardView: View {
             .padding(.horizontal, 20)
             .padding(.top, 14)
 
-        Button {
+        primaryActionButton(L.alertImBack, color: .green) {
             state.confirmReturn()
-        } label: {
-            Text(L.alertImBack)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(.green.gradient, in: RoundedRectangle(cornerRadius: 10))
         }
-        .buttonStyle(.borderless)
         .padding(.horizontal, 24)
         .padding(.top, 20)
-
-        if state.config.shortcutEnabled {
-            Text(L.shortcutQuickConfirm(state.config.shortcutDisplay))
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary.opacity(0.5))
-                .padding(.top, 8)
-        }
 
         Spacer().frame(height: 28)
     }
@@ -281,25 +324,12 @@ struct BreakCardView: View {
                 .multilineTextAlignment(.center)
         }
 
-        Button {
+        primaryActionButton(L.alertConfirmBreak, color: .orange) {
             state.confirmBreak()
-        } label: {
-            Text(L.alertConfirmBreak)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: 280)
-                .padding(.vertical, 12)
-                .background(.orange.gradient, in: RoundedRectangle(cornerRadius: 10))
         }
-        .buttonStyle(.borderless)
 
-        if state.config.shortcutEnabled {
-            Text(L.shortcutQuickConfirm(state.config.shortcutDisplay))
-                .font(.system(size: 12))
-                // Explicit white: the fullscreen card sits on the dark shield;
-                // semantic .secondary goes dark-gray in light appearance and
-                // disappears against it.
-                .foregroundStyle(.white.opacity(0.55))
+        secondaryActionButton(L.alertSkipBreak) {
+            state.skipBreakFromAlert()
         }
     }
 
@@ -372,6 +402,7 @@ struct BreakCardView: View {
         }
         .disabled(state.isPreview)
         .buttonStyle(.borderless)
+        .handCursor()
     }
 
     // MARK: - Fullscreen: Waiting
@@ -388,25 +419,8 @@ struct BreakCardView: View {
             .foregroundStyle(.white.opacity(0.7))
             .multilineTextAlignment(.center)
 
-        Button {
+        primaryActionButton(L.alertImBack, color: .green) {
             state.confirmReturn()
-        } label: {
-            Text(L.alertImBack)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(maxWidth: 280)
-                .padding(.vertical, 12)
-                .background(.green.gradient, in: RoundedRectangle(cornerRadius: 10))
-        }
-        .buttonStyle(.borderless)
-
-        if state.config.shortcutEnabled {
-            Text(L.shortcutQuickConfirm(state.config.shortcutDisplay))
-                .font(.system(size: 12))
-                // Explicit white: the fullscreen card sits on the dark shield;
-                // semantic .secondary goes dark-gray in light appearance and
-                // disappears against it.
-                .foregroundStyle(.white.opacity(0.55))
         }
     }
 }

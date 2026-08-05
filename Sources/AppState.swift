@@ -561,8 +561,8 @@ final class AppState {
     /// Dev-build automation driver (probe investigations, issue #30): drives
     /// phase transitions from a CLI harness — no UI clicks, no Accessibility
     /// permission. Post a distributed notification from any local process:
-    ///   healthtick.dev.confirmBreak / healthtick.dev.confirmReturn /
-    ///   healthtick.dev.dump
+    ///   healthtick.dev.confirmBreak / healthtick.dev.skipBreak /
+    ///   healthtick.dev.confirmReturn / healthtick.dev.dump
     /// Commands are phase-guarded so a dumb timed loop can post them
     /// repeatedly. Release builds (no .dev suffix) never register.
     private func setupDevDriver() {
@@ -573,6 +573,13 @@ final class AppState {
                 guard let self, self.phase == .alerting else { return }
                 Probe.log("devDriver: confirmBreak")
                 self.confirmBreak()
+            }
+        }
+        center.addObserver(forName: .init("healthtick.dev.skipBreak"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.phase == .alerting else { return }
+                Probe.log("devDriver: skipBreak")
+                self.skipBreakFromAlert()
             }
         }
         center.addObserver(forName: .init("healthtick.dev.confirmReturn"), object: nil, queue: .main) { [weak self] _ in
@@ -674,6 +681,34 @@ final class AppState {
             overlayManager.dismissMenuPanel(force: true)
         }
         startBreak()
+    }
+
+    /// The alert's other exit: skip this break outright and go straight back to
+    /// work (issue #33). Before this, the only way out was to confirm the break
+    /// and then triple-click the emergency skip inside it — an escape hatch used
+    /// as a daily route. The break is still booked as skipped, so the cost of
+    /// skipping stays where it belongs: the record and the menu-bar warning,
+    /// not the user's fingers. The 3-click skip during a running break is
+    /// untouched.
+    func skipBreakFromAlert() {
+        guard phase == .alerting else { return }
+        Probe.log("skipBreakFromAlert position=\(config.breakPosition.rawValue)")
+        cancelAlertSoundBurst()
+        overlayManager.hide()
+
+        if let sid = currentSessionId {
+            // Close the work leg too: startBreak() normally does this, and it is
+            // what today's work minutes are computed from — skipping past it
+            // would leave work_end NULL and the session counted as an orphan.
+            db.endWork(sessionId: sid)
+            // Write both break ends so the row reads like every other break
+            // record; actual_seconds = 0 is what marks it as never taken.
+            db.startSessionBreak(sessionId: sid)
+            db.endSessionBreak(sessionId: sid, actualSeconds: 0, skipped: true)
+        }
+        todaySkipCount = db.todaySkipCount()
+
+        startWork()
     }
 
     // MARK: - Break

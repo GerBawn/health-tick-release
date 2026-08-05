@@ -93,6 +93,7 @@ struct L {
     static var healthCheckIn: String { isZh ? "健康打卡" : "Health Check-in" }
     static var defaultBreakReminder: String { isZh ? "该休息了" : "Time for a break" }
     static var alertConfirmBreak: String { isZh ? "好的，我去休息" : "OK, I'll take a break" }
+    static var alertSkipBreak: String { isZh ? "这次先不休息" : "Skip this break" }
     static var breakOverReturnPrompt: String { isZh ? "休息结束啦！准备好继续工作了吗？" : "Break is over! Ready to get back to work?" }
     static var alertImBack: String { isZh ? "我回来了" : "I'm back" }
 
@@ -361,6 +362,10 @@ struct L {
     static var helpBreakWindowDetect: String {
         isZh ? "**操作检测**：如果你在休息期间继续使用电脑（空闲时间 < 3 秒），倒计时会自动暂停，确保你真正休息了足够时间。"
             : "**Activity Detection**: If you continue using the computer during break (idle < 3 sec), the countdown pauses to ensure you truly rest."
+    }
+    static var helpBreakWindowSkip2: String {
+        isZh ? "**跳过本次**：提醒弹出时点「这次先不休息」即可直接回到工作，该次会计入跳过次数。"
+            : "**Skip This Break**: Tap \"Skip this break\" on the reminder to go straight back to work — it still counts toward your skip tally."
     }
     static var helpBreakWindowSkip: String {
         isZh ? "**强制跳过**：连续快速点击休息窗口 3 次可以强制关闭（紧急情况使用）。"
