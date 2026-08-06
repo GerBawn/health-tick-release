@@ -206,6 +206,9 @@ struct AppConfig: Equatable {
     var longBreakEnabled: Bool = false
     var longBreakInterval: Int = 4            // every N cycles
     var longBreakSeconds: Int = 900           // 15 minutes default
+    var preBreakNoticeEnabled: Bool = false
+    var preBreakNoticeSeconds: Int = 60       // heads-up lead before a normal break
+    var preBreakNoticeLongSeconds: Int = 120  // heads-up lead before a long break
     var autoCheckUpdate: Bool = true
     var resetOnScreenLock: Bool = true
     var shortcutKeyCode: UInt16 = 36  // Return
@@ -407,6 +410,16 @@ final class AppState {
         startQuietCheckTimer()
         setupShortcutMonitors()
         setupDevDriver()
+
+        // Pre-break notice enabled but authorization never decided (config
+        // restored / migrated without passing through the settings toggle):
+        // ask now so the first heads-up isn't silently dropped. No-op when
+        // permission is already granted or denied.
+        if config.preBreakNoticeEnabled {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                PreBreakNotifier.shared.requestAuthorization { _ in }
+            }
+        }
 
         refreshHolidayCalendarIfStale()
 
@@ -612,6 +625,7 @@ final class AppState {
 
     func startWork() {
         goalAutoStopped = false
+        preBreakNoticeFired = false
         phase = .working
         currentSessionWorkConfig = config.workMinutes
         targetTime = Date().addingTimeInterval(Double(workDurationSeconds))
@@ -631,10 +645,12 @@ final class AppState {
 
     private func tick() {
         guard phase == .working else { return }
+        let oldVal = remainingSeconds
         let newVal = max(0, Int(targetTime.timeIntervalSinceNow))
         if newVal != remainingSeconds {
             remainingSeconds = newVal
         }
+        maybeFirePreBreakNotice(oldVal: oldVal, newVal: newVal)
         // Refresh work minutes every 60 seconds
         if Date().timeIntervalSince(lastWorkMinutesRefresh) >= 60 {
             let dbMinutes = db.todayWorkMinutes()
@@ -650,6 +666,32 @@ final class AppState {
         if remainingSeconds <= 0 {
             onWorkDone()
         }
+    }
+
+    // MARK: - Pre-Break Notice (issue #34)
+
+    /// Set once the heads-up fired for the current work session so it never
+    /// repeats; startWork() resets it for the next session.
+    private var preBreakNoticeFired = false
+
+    /// Fire the pre-break heads-up when the countdown CROSSES the configured
+    /// lead threshold (from above it to at/below it). Crossing detection — not
+    /// `remaining <= lead` — so a lead longer than the whole work session never
+    /// fires at work start, and a session restored below the threshold doesn't
+    /// re-announce. `newVal > 0` skips the pointless case where the crossing
+    /// tick IS the break tick (e.g. after a long sleep the countdown jumps
+    /// straight to 0 — the real alert shows in the same tick).
+    private func maybeFirePreBreakNotice(oldVal: Int, newVal: Int) {
+        guard config.preBreakNoticeEnabled, !preBreakNoticeFired else { return }
+        let lead = upcomingBreakIsLong ? config.preBreakNoticeLongSeconds : config.preBreakNoticeSeconds
+        guard lead > 0, oldVal > lead, newVal <= lead, newVal > 0 else { return }
+        preBreakNoticeFired = true
+        Probe.log("preBreakNotice fired: \(newVal)s before \(upcomingBreakIsLong ? "long" : "normal") break")
+        PreBreakNotifier.shared.send(
+            secondsUntilBreak: newVal,
+            isLong: upcomingBreakIsLong,
+            soundEnabled: config.soundEnabled
+        )
     }
 
     // MARK: - Work Done -> Alert
@@ -713,6 +755,14 @@ final class AppState {
 
     // MARK: - Break
 
+    /// Whether the break that ends the CURRENT work session will be a long one.
+    /// Single source of truth shared by startBreak and the pre-break notice, so
+    /// the heads-up always announces the same break type that actually starts.
+    var upcomingBreakIsLong: Bool {
+        config.longBreakEnabled && config.longBreakInterval > 0
+            && completedCycles > 0 && completedCycles % config.longBreakInterval == 0
+    }
+
     private func startBreak() {
         phase = .breaking
         timer?.invalidate()  // Stop work timer; overlay manager handles break countdown
@@ -721,9 +771,7 @@ final class AppState {
         breakStartDate = Date()
         currentBreakActivity = breakActivities.randomElement()
         currentReminder = config.reminders.randomElement()
-        let isLongBreak = config.longBreakEnabled && config.longBreakInterval > 0
-            && completedCycles > 0 && completedCycles % config.longBreakInterval == 0
-        let secs = isLongBreak ? config.longBreakSeconds : config.breakSeconds
+        let secs = upcomingBreakIsLong ? config.longBreakSeconds : config.breakSeconds
         remainingSeconds = secs
         currentBreakTotalSeconds = secs
 

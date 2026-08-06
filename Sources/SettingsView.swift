@@ -1191,6 +1191,7 @@ struct ReminderTab: View {
     @State private var newReminder = ""
     @State private var editingIndex: Int? = nil
     @State private var editingText = ""
+    @State private var notifDenied = false
 
     var body: some View {
         @Bindable var state = state
@@ -1207,6 +1208,8 @@ struct ReminderTab: View {
                     sound: $state.config.alertSound,
                     repeatCount: $state.config.alertSoundRepeatCount
                 )
+                Divider().padding(.leading, rowContentInset)
+                preBreakNoticeRows
             }
             .padding(.vertical, 4)
             .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
@@ -1313,6 +1316,94 @@ struct ReminderTab: View {
             state.config.reminders[index] = text
         }
         editingIndex = nil
+    }
+
+    /// Pre-break notification (issue #34): toggle + lead-time rows for normal
+    /// and long breaks. Delivered as a system notification, so enabling asks
+    /// for permission and a denied state is surfaced inline instead of the
+    /// feature silently never firing.
+    @ViewBuilder
+    private var preBreakNoticeRows: some View {
+        @Bindable var state = state
+        VStack(spacing: 0) {
+            toggleRow(icon: "bell.badge.fill", color: .orange, label: L.preBreakNotice, isOn: $state.config.preBreakNoticeEnabled)
+                .onChange(of: state.config.preBreakNoticeEnabled) { _, enabled in
+                    if enabled {
+                        PreBreakNotifier.shared.requestAuthorization { granted in
+                            notifDenied = !granted
+                        }
+                    } else {
+                        notifDenied = false
+                    }
+                }
+                .onAppear {
+                    if state.config.preBreakNoticeEnabled {
+                        PreBreakNotifier.shared.checkDenied { denied in
+                            notifDenied = denied
+                        }
+                    }
+                }
+            Text(L.preBreakNoticeDesc)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, rowContentInset)
+                .padding(.trailing, 14)
+                .padding(.bottom, 6)
+
+            if state.config.preBreakNoticeEnabled {
+                if notifDenied {
+                    Text(L.preBreakNoticeDenied)
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, rowContentInset)
+                        .padding(.trailing, 14)
+                        .padding(.bottom, 6)
+                }
+                leadTimeRow(
+                    label: L.preBreakNoticeLead,
+                    value: $state.config.preBreakNoticeSeconds,
+                    isLong: false
+                )
+                leadTimeRow(
+                    label: L.preBreakNoticeLeadLong,
+                    value: $state.config.preBreakNoticeLongSeconds,
+                    isLong: true
+                )
+            }
+        }
+    }
+
+    /// One lead-time row: label + picker + its own preview button. Both the
+    /// short- and long-break rows share this layout so their pickers align.
+    private func leadTimeRow(label: String, value: Binding<Int>, isLong: Bool) -> some View {
+        HStack(spacing: 10) {
+            Text(label).font(.callout).foregroundStyle(.secondary)
+            Spacer()
+            Picker("", selection: value) {
+                ForEach([15, 30, 60, 120, 180, 300], id: \.self) { secs in
+                    Text(L.formatBreakDuration(secs)).tag(secs)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+            Button {
+                PreBreakNotifier.shared.send(
+                    secondsUntilBreak: value.wrappedValue,
+                    isLong: isLong,
+                    soundEnabled: state.config.soundEnabled
+                )
+            } label: {
+                Text(L.preview)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.blue)
+            }
+            .buttonStyle(.borderless)
+        }
+        .padding(.leading, rowContentInset)
+        .padding(.trailing, 14)
+        .padding(.bottom, 6)
     }
 }
 

@@ -161,6 +161,9 @@ final class Database {
                 case "long_break_enabled": config.longBreakEnabled = value == "1"
                 case "long_break_interval": config.longBreakInterval = Int(value) ?? 4
                 case "long_break_seconds": config.longBreakSeconds = Int(value) ?? 900
+                case "pre_break_notice_enabled": config.preBreakNoticeEnabled = value == "1"
+                case "pre_break_notice_seconds": config.preBreakNoticeSeconds = Int(value) ?? 60
+                case "pre_break_notice_long_seconds": config.preBreakNoticeLongSeconds = Int(value) ?? 120
                 case "auto_pause_on_goal": config.autoPauseOnGoal = value == "1"
                 case "shortcut_enabled": config.shortcutEnabled = value == "1"
                 case "shortcut_keycode": config.shortcutKeyCode = UInt16(value) ?? 36
@@ -223,6 +226,9 @@ final class Database {
         exec("INSERT OR REPLACE INTO config (key, value) VALUES ('long_break_enabled', '\(config.longBreakEnabled ? "1" : "0")')")
         exec("INSERT OR REPLACE INTO config (key, value) VALUES ('long_break_interval', '\(config.longBreakInterval)')")
         exec("INSERT OR REPLACE INTO config (key, value) VALUES ('long_break_seconds', '\(config.longBreakSeconds)')")
+        exec("INSERT OR REPLACE INTO config (key, value) VALUES ('pre_break_notice_enabled', '\(config.preBreakNoticeEnabled ? "1" : "0")')")
+        exec("INSERT OR REPLACE INTO config (key, value) VALUES ('pre_break_notice_seconds', '\(config.preBreakNoticeSeconds)')")
+        exec("INSERT OR REPLACE INTO config (key, value) VALUES ('pre_break_notice_long_seconds', '\(config.preBreakNoticeLongSeconds)')")
         exec("INSERT OR REPLACE INTO config (key, value) VALUES ('auto_pause_on_goal', '\(config.autoPauseOnGoal ? "1" : "0")')")
         exec("INSERT OR REPLACE INTO config (key, value) VALUES ('shortcut_enabled', '\(config.shortcutEnabled ? "1" : "0")')")
         exec("INSERT OR REPLACE INTO config (key, value) VALUES ('shortcut_keycode', '\(config.shortcutKeyCode)')")

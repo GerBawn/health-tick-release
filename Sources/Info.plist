@@ -11,9 +11,9 @@
 	<key>CFBundleName</key>
 	<string>HealthTick</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.6.26</string>
+	<string>1.6.27</string>
 	<key>CFBundleVersion</key>
-	<string>78</string>
+	<string>79</string>
 	<key>LSUIElement</key>
 	<true/>
 </dict>

@@ -89,6 +89,20 @@ struct L {
         isZh ? "跳过 (\(current)/\(total))" : "Skip (\(current)/\(total))"
     }
 
+    // MARK: - Pre-Break Notice
+    static func preBreakNoticeTitle(_ duration: String, isLong: Bool) -> String {
+        if isLong {
+            return isZh ? "☕️ \(duration)后进入长休息" : "☕️ Long break in \(duration)"
+        }
+        return isZh ? "⏳ \(duration)后进入休息" : "⏳ Break in \(duration)"
+    }
+    static var preBreakNoticeBody: String { isZh ? "💾 记得保存手头的工作，准备起身活动一下～ 🧘" : "💾 Save your work and get ready to stretch 🧘" }
+    static var preBreakNotice: String { isZh ? "休息前通知" : "Pre-break Notification" }
+    static var preBreakNoticeDesc: String { isZh ? "休息提醒弹出前，先发送系统通知，留出时间保存手头工作" : "Sends a system notification before the break reminder, so you have time to save your work" }
+    static var preBreakNoticeLead: String { isZh ? "普通休息提前通知" : "Notify before normal break" }
+    static var preBreakNoticeLeadLong: String { isZh ? "长休息提前通知" : "Notify before long break" }
+    static var preBreakNoticeDenied: String { isZh ? "通知权限已被拒绝，请在「系统设置 → 通知」中允许 HealthTick" : "Notifications are denied — allow HealthTick in System Settings → Notifications" }
+
     // MARK: - Alerts
     static var healthCheckIn: String { isZh ? "健康打卡" : "Health Check-in" }
     static var defaultBreakReminder: String { isZh ? "该休息了" : "Time for a break" }
