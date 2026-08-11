@@ -15,6 +15,37 @@ struct VisualEffectBackground: NSViewRepresentable {
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
+// MARK: - Snooze Duration Pill (issue #35)
+
+/// One-click snooze duration chip. Own struct so each pill keeps its own
+/// hover state. Explicit whites on the fullscreen shield — semantic colors
+/// render near-black in light appearance there (issue #31).
+private struct SnoozePillButton: View {
+    let minutes: Int
+    let fullscreen: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(L.alertSnoozeMinutes(minutes))
+                .font(.system(size: fullscreen ? 13 : 11, weight: .medium))
+                .foregroundStyle(fullscreen
+                    ? AnyShapeStyle(.white.opacity(hovering ? 0.95 : 0.72))
+                    : AnyShapeStyle(.primary.opacity(hovering ? 0.9 : 0.68)))
+                .padding(.horizontal, fullscreen ? 14 : 10)
+                .padding(.vertical, fullscreen ? 6 : 5)
+                .background(Capsule().fill(fullscreen
+                    ? AnyShapeStyle(.white.opacity(hovering ? 0.22 : 0.14))
+                    : AnyShapeStyle(.primary.opacity(hovering ? 0.16 : 0.10))))
+        }
+        .buttonStyle(.plain)
+        .handCursor()
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+    }
+}
+
 // MARK: - Shared Break Card View (single source of truth for ALL break UIs)
 
 struct BreakCardView: View {
@@ -122,6 +153,39 @@ struct BreakCardView: View {
         .animation(.easeOut(duration: 0.15), value: skipHovering)
     }
 
+    /// Snooze row for the alerting phase (issue #35): a small label above
+    /// three one-click duration pills. Sits between the primary confirm and
+    /// the skip pill — a middle tier: unlike skipping, the break is still
+    /// coming, so it deserves more visual weight than the skip escape hatch
+    /// but must never compete with "go take the break".
+    @ViewBuilder
+    private var snoozeRow: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 4) {
+                Text("⏰")
+                    .font(.system(size: fullscreen ? 12 : 10))
+                Text(L.alertSnoozeLabel)
+                    .font(.system(size: fullscreen ? 13 : 11, weight: .medium))
+            }
+            .foregroundStyle(fullscreen
+                ? AnyShapeStyle(.white.opacity(0.55))
+                : AnyShapeStyle(.secondary))
+
+            HStack(spacing: 8) {
+                ForEach(Self.snoozeOptionsMinutes, id: \.self) { minutes in
+                    SnoozePillButton(minutes: minutes, fullscreen: fullscreen) {
+                        state.snoozeBreakFromAlert(minutes: minutes)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 2 = "let me finish this line", 5 = the classic snooze, 10 = "the
+    /// meeting has one more section". Roughly doubling steps so picking one
+    /// under pressure takes no thought.
+    private static let snoozeOptionsMinutes = [2, 5, 10]
+
     // MARK: - Off-Work Summary (shares the break popup rendering path)
 
     @ViewBuilder
@@ -194,6 +258,9 @@ struct BreakCardView: View {
         }
         .padding(.horizontal, 24)
         .padding(.top, 16)
+
+        snoozeRow
+            .padding(.top, 14)
 
         secondaryActionButton(L.alertSkipBreak) {
             state.skipBreakFromAlert()
@@ -327,6 +394,8 @@ struct BreakCardView: View {
         primaryActionButton(L.alertConfirmBreak, color: .orange) {
             state.confirmBreak()
         }
+
+        snoozeRow
 
         secondaryActionButton(L.alertSkipBreak) {
             state.skipBreakFromAlert()

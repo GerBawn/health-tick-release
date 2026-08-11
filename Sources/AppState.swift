@@ -549,7 +549,13 @@ final class AppState {
     private func saveTimerState() {
         switch phase {
         case .working:
-            db.saveTimerState(phase: "working", targetTime: nil, pausedRemaining: remainingSeconds)
+            // A snoozed countdown is NOT restorable work: restoring it as
+            // "working" would open a fresh few-minute session (restore's
+            // working branch calls startSession) and book its minutes as
+            // extra work. Persist as "alerting" instead — after a relaunch
+            // the break is simply due again, which is also the honest state.
+            let persistPhase = snoozeActive ? "alerting" : "working"
+            db.saveTimerState(phase: persistPhase, targetTime: nil, pausedRemaining: snoozeActive ? 0 : remainingSeconds)
         case .paused:
             db.saveTimerState(phase: "paused", targetTime: nil, pausedRemaining: pausedRemaining)
         case .alerting, .breaking, .waiting:
@@ -575,7 +581,8 @@ final class AppState {
     /// phase transitions from a CLI harness — no UI clicks, no Accessibility
     /// permission. Post a distributed notification from any local process:
     ///   healthtick.dev.confirmBreak / healthtick.dev.skipBreak /
-    ///   healthtick.dev.confirmReturn / healthtick.dev.dump
+    ///   healthtick.dev.snoozeBreak / healthtick.dev.confirmReturn /
+    ///   healthtick.dev.dump
     /// Commands are phase-guarded so a dumb timed loop can post them
     /// repeatedly. Release builds (no .dev suffix) never register.
     private func setupDevDriver() {
@@ -593,6 +600,13 @@ final class AppState {
                 guard let self, self.phase == .alerting else { return }
                 Probe.log("devDriver: skipBreak")
                 self.skipBreakFromAlert()
+            }
+        }
+        center.addObserver(forName: .init("healthtick.dev.snoozeBreak"), object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.phase == .alerting else { return }
+                Probe.log("devDriver: snoozeBreak")
+                self.snoozeBreakFromAlert(minutes: 2)
             }
         }
         center.addObserver(forName: .init("healthtick.dev.confirmReturn"), object: nil, queue: .main) { [weak self] _ in
@@ -626,6 +640,7 @@ final class AppState {
     func startWork() {
         goalAutoStopped = false
         preBreakNoticeFired = false
+        snoozeActive = false
         phase = .working
         currentSessionWorkConfig = config.workMinutes
         targetTime = Date().addingTimeInterval(Double(workDurationSeconds))
@@ -697,6 +712,7 @@ final class AppState {
     // MARK: - Work Done -> Alert
 
     private func onWorkDone() {
+        snoozeActive = false
         currentReminder = config.reminders.randomElement() ?? L.defaultBreakReminder
         playAlertSound()
 
@@ -751,6 +767,34 @@ final class AppState {
         todaySkipCount = db.todaySkipCount()
 
         startWork()
+    }
+
+    // MARK: - Snooze (issue #35)
+
+    /// True while an already-due break is postponed and the short snooze
+    /// countdown is running in the .working phase. Kept as its own flag (not a
+    /// new phase) so every working-phase behavior — tick, quiet hours, pause —
+    /// applies unchanged; only persistence, the session-minutes estimate and
+    /// the phase label need to know the countdown isn't real work time.
+    private(set) var snoozeActive = false
+
+    /// The alert's third exit (issue #35): the user intends to take the break,
+    /// just not right now (meeting, presentation). Re-arms the work countdown
+    /// for a few minutes and re-alerts; unlike skipBreakFromAlert nothing is
+    /// booked — no skipped record, no skip-count increment, the session stays
+    /// open exactly as if the alert were still on screen.
+    func snoozeBreakFromAlert(minutes: Int) {
+        guard phase == .alerting else { return }
+        Probe.log("snoozeBreakFromAlert minutes=\(minutes) position=\(config.breakPosition.rawValue)")
+        cancelAlertSoundBurst()
+        overlayManager.hide()
+
+        snoozeActive = true
+        phase = .working
+        targetTime = Date().addingTimeInterval(Double(minutes * 60))
+        remainingSeconds = minutes * 60
+        saveTimerState()
+        startTicking()
     }
 
     // MARK: - Break
@@ -948,6 +992,12 @@ final class AppState {
     /// Accurate work minutes for the current in-progress session, calculated from timer state
     private var currentSessionWorkMinutes: Int {
         guard currentSessionId != nil else { return 0 }
+        // While snoozing, remainingSeconds counts the snooze — not work left —
+        // so the formula below would read as a 5-minute rollback. The session
+        // has reached its full configured length (the alert already fired),
+        // which is also what the DB books at endWork (elapsed capped at
+        // work_minutes).
+        if snoozeActive { return currentSessionWorkConfig }
         if phase == .working {
             return max(0, currentSessionWorkConfig * 60 - remainingSeconds) / 60
         } else if phase == .paused, pausedPhase == .working {
@@ -1144,7 +1194,7 @@ final class AppState {
 
     var phaseLabel: String {
         switch phase {
-        case .working: return L.phaseWorking
+        case .working: return snoozeActive ? L.phaseSnoozed : L.phaseWorking
         case .alerting: return L.phaseAlerting
         case .breaking: return L.phaseBreaking
         case .waiting: return L.phaseWaiting
