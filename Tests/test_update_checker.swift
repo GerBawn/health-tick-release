@@ -315,6 +315,52 @@ if shouldFallback {
     print("  FAIL: 28. Should have triggered fallback")
 }
 
+// MARK: - Site feed (docs/latest.json) consistency
+// The in-app updater's PRIMARY source is docs/latest.json served via GitHub
+// Pages. A feed whose sha256/size doesn't match the DMG actually in
+// docs/downloads/ makes every client download fail verification — guard the
+// release pipeline here, offline and deterministically.
+
+print("\n=== Site feed consistency (docs/latest.json) ===\n")
+
+import CryptoKit
+
+let repoRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+let feedURL = repoRoot.appendingPathComponent("docs/latest.json")
+
+if let feedData = try? Data(contentsOf: feedURL),
+   let feed = try? JSONSerialization.jsonObject(with: feedData) as? [String: Any] {
+
+    let version = feed["version"] as? String ?? ""
+    assert(!version.isEmpty && !version.hasPrefix("v"), "feed version present, no 'v' prefix: \(version)")
+
+    let downloads = feed["downloads"] as? [String: [String: Any]] ?? [:]
+    for key in ["Apple-Silicon", "Intel"] {
+        guard let entry = downloads[key] else {
+            assert(false, "feed downloads has \(key) entry")
+            continue
+        }
+        let urlStr = entry["url"] as? String ?? ""
+        assert(urlStr.hasSuffix("HealthTick-v\(version)-\(key).dmg"),
+               "\(key) url matches version & platform naming")
+        assert(urlStr.hasPrefix("https://www.lifedever.com/health-tick-release/downloads/"),
+               "\(key) url points at the site downloads dir")
+
+        let dmg = repoRoot.appendingPathComponent("docs/downloads/HealthTick-v\(version)-\(key).dmg")
+        if let dmgData = try? Data(contentsOf: dmg) {
+            let actualSHA = SHA256.hash(data: dmgData).map { String(format: "%02x", $0) }.joined()
+            assertEqual(actualSHA, (entry["sha256"] as? String ?? "").lowercased(),
+                        "\(key) sha256 matches DMG on disk")
+            assertEqual(dmgData.count, entry["size"] as? Int ?? -1,
+                        "\(key) size matches DMG on disk")
+        } else {
+            assert(false, "\(key) DMG exists in docs/downloads/")
+        }
+    }
+} else {
+    assert(false, "docs/latest.json exists and parses")
+}
+
 // MARK: - Summary
 
 print("\n============================")

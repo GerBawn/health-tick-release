@@ -17,15 +17,35 @@ if git ls-remote --tags origin | grep -q "refs/tags/${TAG}$"; then
     exit 1
 fi
 
+# Release notes — defined up front because both the site feed (latest.json,
+# committed before push) and the GitHub/Gitee releases consume them.
+RELEASE_NOTES="## HealthTick ${TAG}
+
+### ✨ 改进
+- 应用内更新全面改造：更新源迁移至国内可直连的站点，无需代理也能快速下载；下载失败自动切换 Gitee / GitHub 备用源
+- 更新包下载后自动校验完整性（大小 + SHA-256），防止安装损坏的安装包
+
+### 🐞 Bug 修复
+- 修复「点击更新」按钮无响应的问题：更新弹窗关闭后，再次点击现在能正常重新打开
+- 修复无代理环境下更新下载进度长时间停滞的问题
+
+### 📦 下载
+- **Apple Silicon (M1/M2/M3/M4)**: \`HealthTick-${TAG}-Apple-Silicon.dmg\`
+- **Intel**: \`HealthTick-${TAG}-Intel.dmg\`
+
+### 📥 安装方式
+打开 \`.dmg\` 文件，将 HealthTick 拖入 Applications 文件夹。
+首次打开请前往 **系统设置 → 隐私与安全性** 点击\"仍要打开\"。"
+
 # Build for each architecture separately
-echo "[1/6] Building binaries..."
+echo "[1/7] Building binaries..."
 swift build -c release --arch arm64
 echo "  Built arm64"
 swift build -c release --arch x86_64
 echo "  Built x86_64"
 
 # Package app bundles
-echo "[2/6] Packaging apps..."
+echo "[2/7] Packaging apps..."
 STAGE="/tmp/health-tick-release-${VERSION}"
 rm -rf "$STAGE"
 
@@ -46,7 +66,7 @@ for label in Apple-Silicon Intel; do
 done
 
 # Create DMGs
-echo "[3/6] Creating DMGs..."
+echo "[3/7] Creating DMGs..."
 for label in Apple-Silicon Intel; do
     DMG_NAME="HealthTick-${TAG}-${label}.dmg"
     DMG_DIR="${STAGE}/dmg-${label}"
@@ -58,8 +78,52 @@ for label in Apple-Silicon Intel; do
     echo "  Created ${DMG_NAME}"
 done
 
+# Sync the site download source — the in-app updater's PRIMARY feed.
+# Skipping this leaves latest.json on the old version and no client ever
+# sees the update. DMGs + checksums must come from THIS build's artifacts.
+echo "[4/7] Updating site feed (docs/latest.json + docs/downloads)..."
+rm -f docs/downloads/HealthTick-*.dmg
+mkdir -p docs/downloads
+cp "${STAGE}/HealthTick-${TAG}-Apple-Silicon.dmg" docs/downloads/
+cp "${STAGE}/HealthTick-${TAG}-Intel.dmg" docs/downloads/
+VERSION="$VERSION" TAG="$TAG" RELEASE_NOTES="$RELEASE_NOTES" python3 - <<'PYEOF'
+import hashlib, json, os
+
+version = os.environ["VERSION"]
+tag = os.environ["TAG"]
+# Feed notes: keep the feature/fix sections, drop the download/install
+# boilerplate (the in-app dialog has its own download UI).
+notes = os.environ["RELEASE_NOTES"].split("### 📦 下载")[0].strip()
+
+def entry(label):
+    name = f"HealthTick-{tag}-{label}.dmg"
+    data = open(f"docs/downloads/{name}", "rb").read()
+    return {
+        "url": f"https://www.lifedever.com/health-tick-release/downloads/{name}",
+        "size": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+
+feed = {
+    "version": version,
+    "notes_zh": notes,
+    "notes_en": "",
+    "downloads": {
+        "Apple-Silicon": entry("Apple-Silicon"),
+        "Intel": entry("Intel"),
+    },
+}
+with open("docs/latest.json", "w") as f:
+    json.dump(feed, f, ensure_ascii=False, indent=2)
+print("  docs/latest.json ->", version)
+PYEOF
+# Consistency gate: feed sha256/size must match the DMGs on disk
+swift Tests/test_update_checker.swift > /tmp/ht-feed-check.log 2>&1 || {
+    echo "Error: feed consistency tests failed"; tail -20 /tmp/ht-feed-check.log; exit 1; }
+echo "  Feed consistency tests passed"
+
 # Git commit, tag, push
-echo "[4/6] Pushing tag ${TAG}..."
+echo "[5/7] Pushing tag ${TAG}..."
 git add -A
 git diff --cached --quiet || git commit -m "${TAG}"
 git tag "$TAG" 2>/dev/null || true
@@ -69,22 +133,7 @@ git push origin main "$TAG"
 git push gitee main "$TAG" 2>/dev/null || echo "  Warning: failed to push to Gitee remote"
 
 # Upload to GitHub release repo
-echo "[5/6] Publishing release to GitHub ${REPO}..."
-RELEASE_NOTES="## HealthTick ${TAG}
-
-### ✨ 新增功能
-- 休息提醒新增「延迟休息」：到点时暂时不方便休息（开会、演示），可一键选择 2 / 5 / 10 分钟后再次提醒 (#35 感谢 @butfool)
-- 延迟不算跳过、不计入跳过次数；延迟时间归属本次工作周期，工作时长统计不受影响
-- 延迟期间菜单栏显示「已延后提醒」倒计时，到期后重新弹出提醒，可继续延迟或选择休息/跳过
-
-### 📦 下载
-- **Apple Silicon (M1/M2/M3/M4)**: \`HealthTick-${TAG}-Apple-Silicon.dmg\`
-- **Intel**: \`HealthTick-${TAG}-Intel.dmg\`
-
-### 📥 安装方式
-打开 \`.dmg\` 文件，将 HealthTick 拖入 Applications 文件夹。
-首次打开请前往 **系统设置 → 隐私与安全性** 点击\"仍要打开\"。"
-
+echo "[6/7] Publishing release to GitHub ${REPO}..."
 gh release create "$TAG" \
     --repo "$REPO" \
     --title "HealthTick ${TAG}" \
@@ -95,7 +144,7 @@ gh release create "$TAG" \
 echo "  GitHub release done"
 
 # Upload to Gitee release repo
-echo "[6/6] Publishing release to Gitee ${GITEE_REPO}..."
+echo "[7/7] Publishing release to Gitee ${GITEE_REPO}..."
 if [ -n "$GITEE_TOKEN" ]; then
     # Gitee v5 auth: access_token in the request body / form field ("Authorization:
     # token" headers return an HTML error page). JSON is built with python so the

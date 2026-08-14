@@ -1,0 +1,17 @@
+{
+  "version": "1.6.29",
+  "notes_zh": "## HealthTick v1.6.29\n\n### ✨ 改进\n- 应用内更新全面改造：更新源迁移至国内可直连的站点，无需代理也能快速下载；下载失败自动切换 Gitee / GitHub 备用源\n- 更新包下载后自动校验完整性（大小 + SHA-256），防止安装损坏的安装包\n\n### 🐞 Bug 修复\n- 修复「点击更新」按钮无响应的问题：更新弹窗关闭后，再次点击现在能正常重新打开\n- 修复无代理环境下更新下载进度长时间停滞的问题",
+  "notes_en": "",
+  "downloads": {
+    "Apple-Silicon": {
+      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.29-Apple-Silicon.dmg",
+      "size": 2666416,
+      "sha256": "e2209ed5b5fd9ace9a2df3555a7afc4cee26feaabb13384f0e9cf30fdb2c806d"
+    },
+    "Intel": {
+      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.29-Intel.dmg",
+      "size": 2730411,
+      "sha256": "740fa40ff22fba4d3d683329160fec3ce3c235e33f58f2efc51e1983b85af794"
+    }
+  }
+}

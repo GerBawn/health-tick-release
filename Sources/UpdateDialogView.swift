@@ -110,7 +110,10 @@ struct MarkdownWebView: NSViewRepresentable {
 
 struct UpdateDialogView: View {
     @ObservedObject var updater: UpdateChecker
-    @Environment(\.dismiss) private var dismiss
+
+    /// AppKit-hosted window (WindowManager) — SwiftUI's environment dismiss
+    /// has no scene to act on here, close the window imperatively instead.
+    private func dismiss() { updater.closeUpdateWindow() }
 
     var body: some View {
         Group {
@@ -162,7 +165,6 @@ struct UpdateDialogView: View {
                 Spacer()
 
                 Button(L.updateRemindLater) {
-                    updater.showUpdateDialog = false
                     dismiss()
                 }
 
@@ -226,7 +228,7 @@ struct UpdateDialogView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
         }
-        .frame(width: 420)
+        .frame(width: 520)
     }
 
     private func formatBytes(_ bytes: Int64) -> String {

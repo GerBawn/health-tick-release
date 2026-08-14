@@ -326,6 +326,7 @@ struct L {
     static func noUpdateMsg(_ ver: String) -> String { isZh ? "当前版本 v\(ver) 已是最新。" : "Current version v\(ver) is already up to date." }
     static func networkError(_ msg: String) -> String { isZh ? "网络错误: \(msg)" : "Network error: \(msg)" }
     static func downloadFailed(_ msg: String) -> String { isZh ? "下载失败: \(msg)" : "Download failed: \(msg)" }
+    static var updateIncomplete: String { isZh ? "下载不完整或校验失败，请重试" : "Download incomplete or failed verification, please retry" }
 
     // MARK: - Menu Bar Commands
     static var checkForUpdates: String { isZh ? "检查更新..." : "Check for Updates..." }
