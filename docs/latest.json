@@ -1,17 +1,17 @@
 {
-  "version": "1.6.30",
-  "notes_zh": "## HealthTick v1.6.30\n\n### ✨ 新增功能\n- 休息提醒新增「☕️ 我已提前休息」：提前离开工位休息过了，回来被提醒时可以直接补记为完成 —— 计入今日休息次数和连续打卡，不增加跳过次数（感谢 @butfool 贡献 #38）\n\n### 🐞 Bug 修复\n- 修复设置窗口底部被 Dock 遮住的问题（#37）：窗口高度不再随内容无限增长，超出屏幕的部分改为滚动查看（打开「同步国家节假日」后最容易撞上）",
+  "version": "1.6.31",
+  "notes_zh": "## HealthTick v1.6.31\n\n### ✨ 改进\n- 设置里原来的「计划」标签页拆成「计时」和「作息」两页：「计时」管多久（工作/休息时长、每日目标、长休息、护眼模式），「作息」管什么时候（工作日、国家节假日、工作时段、免打扰），不用再在一页里滚很远",
   "notes_en": "",
   "downloads": {
     "Apple-Silicon": {
-      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.30-Apple-Silicon.dmg",
-      "size": 2669425,
-      "sha256": "b47191f84f61361d08e8ea3ef93733a9e46a12e4000a2d47a922ee0969fea600"
+      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.31-Apple-Silicon.dmg",
+      "size": 2666665,
+      "sha256": "10c707d7116444693eba5af3bac9d2a17ea893cbd8ed57ee54c4daa7e2dd773c"
     },
     "Intel": {
-      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.30-Intel.dmg",
-      "size": 2734712,
-      "sha256": "5c2385b43719b28fbf29dadd4e82b744970c77ee438f20f99909b1ee193388ed"
+      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.31-Intel.dmg",
+      "size": 2731063,
+      "sha256": "69f22502def62f230180c6b95f54ec46a2e1c689480b289bebb0001bb18b030c"
     }
   }
 }
