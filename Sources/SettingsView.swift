@@ -4,7 +4,7 @@ import AppKit
 import Combine
 
 private enum SettingsTab: Hashable {
-    case system, app, breakTab, reminders, about
+    case system, rhythm, schedule, breakTab, reminders, about
 }
 
 struct SettingsView: View {
@@ -31,10 +31,16 @@ struct SettingsView: View {
             .tabItem { Label(L.tabSystem, systemImage: "gearshape") }
 
             Group {
-                if selectedTab == .app { AppTab() } else { Color.clear }
+                if selectedTab == .rhythm { RhythmTab() } else { Color.clear }
             }
-            .tag(SettingsTab.app)
-            .tabItem { Label(L.tabApp, systemImage: "calendar.badge.clock") }
+            .tag(SettingsTab.rhythm)
+            .tabItem { Label(L.tabRhythm, systemImage: "timer") }
+
+            Group {
+                if selectedTab == .schedule { ScheduleTab() } else { Color.clear }
+            }
+            .tag(SettingsTab.schedule)
+            .tabItem { Label(L.tabSchedule, systemImage: "calendar.badge.clock") }
 
             Group {
                 if selectedTab == .breakTab { BreakTab() } else { Color.clear }
@@ -483,16 +489,8 @@ struct SystemTab: View {
 
 // MARK: - App Tab
 
-struct AppTab: View {
+struct RhythmTab: View {
     @Environment(AppState.self) var state
-    @State private var showQuietHelp = false
-    @State private var expandedQuietId: UUID? = nil
-    @State private var showWorkHoursHelp = false
-    @State private var showOffWorkHelp = false
-    @State private var isSyncingHolidays = false
-    @State private var holidaySyncError: String?
-    @State private var holidaySyncSuccess = false
-    @State private var showHolidayCalendar = false
 
     var body: some View {
         @Bindable var state = state
@@ -651,9 +649,51 @@ struct AppTab: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 14)
                 .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+            }
+            .padding(16)
+        }
+        .alert(L.durationChanged, isPresented: $state.showRestartPrompt) {
+            Button(L.restartTimer) { state.restartCurrentPhase() }
+            Button(L.laterAction, role: .cancel) {}
+        } message: {
+            Text(L.durationChangedMsg)
+        }
+    }
 
+    private func sliderRow(icon: String, label: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String, color: Color) -> some View {
+        VStack(spacing: 4) {
+            HStack {
+                settingIcon(icon, color)
+                Text(label).font(.callout)
+                Spacer()
+                Text("\(Int(value.wrappedValue)) \(unit)")
+                    .font(.callout.monospacedDigit().bold())
+                    .foregroundStyle(color)
+                    .frame(width: 70, alignment: .trailing)
+            }
+            Slider(value: value, in: range, step: 1).tint(color)
+        }
+    }
+}
+
+// MARK: - Schedule Tab
+
+struct ScheduleTab: View {
+    @Environment(AppState.self) var state
+    @State private var showQuietHelp = false
+    @State private var expandedQuietId: UUID? = nil
+    @State private var showWorkHoursHelp = false
+    @State private var showOffWorkHelp = false
+    @State private var isSyncingHolidays = false
+    @State private var holidaySyncError: String?
+    @State private var holidaySyncSuccess = false
+    @State private var showHolidayCalendar = false
+
+    var body: some View {
+        @Bindable var state = state
+        ScrollView(.vertical) {
+            VStack(spacing: 12) {
                 sectionHeader(L.sectionSchedule)
-                    .padding(.top, 8)
                 // Work Days + Work Hours + Quiet Hours
                 VStack(spacing: 0) {
                     // Work Days
@@ -926,12 +966,6 @@ struct AppTab: View {
             }
             .padding(16)
         }
-        .alert(L.durationChanged, isPresented: $state.showRestartPrompt) {
-            Button(L.restartTimer) { state.restartCurrentPhase() }
-            Button(L.laterAction, role: .cancel) {}
-        } message: {
-            Text(L.durationChangedMsg)
-        }
         .sheet(isPresented: $showHolidayCalendar) {
             HolidayCalendarView()
                 .environment(state)
@@ -980,22 +1014,6 @@ struct AppTab: View {
             }
         }
     }
-
-    private func sliderRow(icon: String, label: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String, color: Color) -> some View {
-        VStack(spacing: 4) {
-            HStack {
-                settingIcon(icon, color)
-                Text(label).font(.callout)
-                Spacer()
-                Text("\(Int(value.wrappedValue)) \(unit)")
-                    .font(.callout.monospacedDigit().bold())
-                    .foregroundStyle(color)
-                    .frame(width: 70, alignment: .trailing)
-            }
-            Slider(value: value, in: range, step: 1).tint(color)
-        }
-    }
-
 
 }
 

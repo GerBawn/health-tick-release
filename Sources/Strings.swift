@@ -118,7 +118,10 @@ struct L {
     // MARK: - Settings - Tabs
     static var tabGeneral: String { isZh ? "通用" : "General" }
     static var tabSystem: String { isZh ? "通用" : "General" }
-    static var tabApp: String { isZh ? "计划" : "Plan" }
+    // 原「计划」标签页拆成两个：一屏塞不下计时节奏 + 工作日程，
+    // 展开节假日同步后窗口会长到屏幕外（issue #37 的成因之一）
+    static var tabRhythm: String { isZh ? "计时" : "Timing" }
+    static var tabSchedule: String { isZh ? "作息" : "Hours" }
     static var tabBreak: String { isZh ? "休息" : "Break" }
     static var tabReminders: String { isZh ? "提醒" : "Reminders" }
     static var tabAbout: String { isZh ? "关于" : "About" }
