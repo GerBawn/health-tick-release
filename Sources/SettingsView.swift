@@ -10,6 +10,15 @@ private enum SettingsTab: Hashable {
 struct SettingsView: View {
     @Environment(AppState.self) private var state
     @State private var selectedTab: SettingsTab = .system
+    /// Ceiling for the window's content height (issue #37). The window sizes
+    /// itself to the content — `.fixedSize(vertical:)` here plus
+    /// `.windowResizability(.contentSize)` on the scene — and nothing else caps
+    /// it, so a tab that grows (expanding "sync public holidays" adds a whole
+    /// block of rows) simply pushes the bottom of the window under the Dock;
+    /// the per-tab ScrollViews never scroll because under `fixedSize` they
+    /// report their full content as the ideal height. Clamping the ideal height
+    /// keeps short tabs snug and hands the overflow back to the ScrollView.
+    @State private var maxContentHeight = SettingsView.availableContentHeight()
 
     var body: some View {
         L.lang = state.config.language
@@ -46,7 +55,24 @@ struct SettingsView: View {
             .tabItem { Label(L.tabAbout, systemImage: "info.circle") }
         }
         .frame(width: 640)
+        .frame(maxHeight: maxContentHeight)
         .fixedSize(horizontal: false, vertical: true)
+        // Dock hiding, resolution changes and moving the window to another
+        // display all change what "fits on screen" means.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didChangeScreenParametersNotification
+        )) { _ in
+            maxContentHeight = Self.availableContentHeight()
+        }
+    }
+
+    /// Screen height the settings content may occupy. `visibleFrame` already
+    /// excludes the menu bar and the Dock; the window's own title bar and a
+    /// little breathing room below come off on top of that. The floor keeps the
+    /// window usable on very short screens (or if AppKit reports nothing).
+    private static func availableContentHeight() -> CGFloat {
+        let visible = NSScreen.main?.visibleFrame.height ?? 800
+        return max(360, visible - 28 - 24)
     }
 }
 
@@ -151,7 +177,7 @@ struct SystemTab: View {
     var body: some View {
 
         @Bindable var state = state
-        ScrollView(.vertical, showsIndicators: false) {
+        ScrollView(.vertical) {
             VStack(spacing: 12) {
             sectionHeader(L.sectionApp)
             VStack(spacing: 0) {
@@ -470,7 +496,7 @@ struct AppTab: View {
 
     var body: some View {
         @Bindable var state = state
-        ScrollView(.vertical, showsIndicators: false) {
+        ScrollView(.vertical) {
             VStack(spacing: 12) {
                 sectionHeader(L.sectionRhythm)
                 // Timer sliders
