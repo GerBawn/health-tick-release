@@ -46,14 +46,49 @@ private struct SnoozePillButton: View {
     }
 }
 
+// MARK: - Secondary Action Pill (issues #33, PR #38)
+
+/// Secondary action pill for the alerting phase: soft tonal fill, narrower and
+/// lighter than the primary so the two never read as twins. Own struct so each
+/// pill keeps its own hover state (with a shared @State every pill lit up at
+/// once). Explicit whites on the fullscreen shield — semantic colors render
+/// near-black in light appearance there (issue #31).
+private struct SecondaryPillButton: View {
+    let emoji: String
+    let title: String
+    let fullscreen: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Text(emoji)
+                    .font(.system(size: fullscreen ? 13 : 11))
+                Text(title)
+                    .font(.system(size: fullscreen ? 14 : 12, weight: .medium))
+            }
+            .foregroundStyle(fullscreen
+                ? AnyShapeStyle(.white.opacity(hovering ? 0.95 : 0.72))
+                : AnyShapeStyle(.primary.opacity(hovering ? 0.9 : 0.68)))
+            .padding(.horizontal, fullscreen ? 22 : 16)
+            .padding(.vertical, fullscreen ? 8 : 6)
+            .background(Capsule().fill(fullscreen
+                ? AnyShapeStyle(.white.opacity(hovering ? 0.22 : 0.14))
+                : AnyShapeStyle(.primary.opacity(hovering ? 0.16 : 0.10))))
+        }
+        .buttonStyle(.plain)
+        .handCursor()
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+    }
+}
+
 // MARK: - Shared Break Card View (single source of truth for ALL break UIs)
 
 struct BreakCardView: View {
     @Environment(AppState.self) var state
     var fullscreen: Bool = false
-
-    /// Hover state for the alert's secondary action ("skip this break").
-    @State private var skipHovering = false
 
     private var timerProgress: Double {
         guard state.phase == .breaking else { return 0 }
@@ -121,49 +156,24 @@ struct BreakCardView: View {
         .handCursor()
     }
 
-    /// Secondary action pill (currently "skip this break"): soft tonal fill,
-    /// narrower and lighter than the primary so the two never read as twins.
-    /// On the fullscreen shield it must use explicit whites — semantic colors
-    /// render near-black in light appearance and vanish there (issue #31).
-    @ViewBuilder
-    private func secondaryActionButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                // Says what the user is choosing instead of resting, which
-                // reads faster than a skip glyph. Deliberately not ✍️ (already
-                // the menu's "worked today" marker); 🧑‍💻 is the gender-neutral
-                // technologist — not 👨‍💻/👩‍💻, which carry a gender.
-                Text("🧑‍💻")
-                    .font(.system(size: fullscreen ? 13 : 11))
-                Text(title)
-                    .font(.system(size: fullscreen ? 14 : 12, weight: .medium))
-            }
-            .foregroundStyle(fullscreen
-                ? AnyShapeStyle(.white.opacity(skipHovering ? 0.95 : 0.72))
-                : AnyShapeStyle(.primary.opacity(skipHovering ? 0.9 : 0.68)))
-            .padding(.horizontal, fullscreen ? 22 : 16)
-            .padding(.vertical, fullscreen ? 8 : 6)
-            .background(Capsule().fill(fullscreen
-                ? AnyShapeStyle(.white.opacity(skipHovering ? 0.22 : 0.14))
-                : AnyShapeStyle(.primary.opacity(skipHovering ? 0.16 : 0.10))))
+    /// The alert's escape hatch: keep working instead of resting (issue #33).
+    /// Deliberately not a ✍️ glyph (already the menu's "worked today" marker);
+    /// 🧑‍💻 is the gender-neutral technologist — not 👨‍💻/👩‍💻, which carry a gender.
+    private func skipActionButton() -> some View {
+        SecondaryPillButton(emoji: "🧑‍💻", title: L.alertSkipBreak, fullscreen: fullscreen) {
+            state.skipBreakFromAlert()
         }
-        .buttonStyle(.plain)
-        .handCursor()
-        .onHover { skipHovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: skipHovering)
     }
 
-    @ViewBuilder
-    private func completedBreakActionButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: "checkmark.circle")
-                .font(.system(size: fullscreen ? 14 : 12, weight: .medium))
-                .foregroundStyle(fullscreen
-                    ? AnyShapeStyle(.white.opacity(0.78))
-                    : AnyShapeStyle(.primary.opacity(0.72)))
+    /// The alert's fourth exit (PR #38): the break already happened away from
+    /// the desk, so book it as done instead of forcing a skip. Same pill as the
+    /// skip action — both are "not taking the break now", they only differ in
+    /// how the cycle is recorded — but it sits above skip: booking a real break
+    /// is the better outcome, so it reads first.
+    private func alreadyRestedActionButton() -> some View {
+        SecondaryPillButton(emoji: "☕️", title: L.alertAlreadyRested, fullscreen: fullscreen) {
+            state.markBreakCompleted()
         }
-        .buttonStyle(.plain)
-        .handCursor()
     }
 
     /// Snooze row for the alerting phase (issue #35): a small label above
@@ -273,17 +283,13 @@ struct BreakCardView: View {
         .padding(.top, 16)
 
         snoozeRow
+            .padding(.top, 14)
+
+        alreadyRestedActionButton()
             .padding(.top, 12)
 
-        secondaryActionButton(L.alertSkipBreak) {
-            state.skipBreakFromAlert()
-        }
-        .padding(.top, 12)
-
-        completedBreakActionButton(L.alertAlreadyRested) {
-            state.markBreakCompleted()
-        }
-        .padding(.top, 10)
+        skipActionButton()
+            .padding(.top, 8)
 
         Spacer().frame(height: 24)
     }
@@ -415,12 +421,11 @@ struct BreakCardView: View {
 
         snoozeRow
 
-        secondaryActionButton(L.alertSkipBreak) {
-            state.skipBreakFromAlert()
-        }
-
-        completedBreakActionButton(L.alertAlreadyRested) {
-            state.markBreakCompleted()
+        // Tight pair: on the fullscreen shield the parent VStack's 20pt spacing
+        // would read as two unrelated tiers rather than one row of exits.
+        VStack(spacing: 10) {
+            alreadyRestedActionButton()
+            skipActionButton()
         }
     }
 
