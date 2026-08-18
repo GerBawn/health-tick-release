@@ -168,8 +168,8 @@ struct BreakCardView: View {
     /// The alert's fourth exit (PR #38): the break already happened away from
     /// the desk, so book it as done instead of forcing a skip. Same pill as the
     /// skip action — both are "not taking the break now", they only differ in
-    /// how the cycle is recorded — but it sits above skip: booking a real break
-    /// is the better outcome, so it reads first.
+    /// how the cycle is recorded — and it sits last: the rarer, after-the-fact
+    /// correction, below the everyday exits.
     private func alreadyRestedActionButton() -> some View {
         SecondaryPillButton(emoji: "☕️", title: L.alertAlreadyRested, fullscreen: fullscreen) {
             state.markBreakCompleted()
@@ -285,10 +285,10 @@ struct BreakCardView: View {
         snoozeRow
             .padding(.top, 14)
 
-        alreadyRestedActionButton()
+        skipActionButton()
             .padding(.top, 12)
 
-        skipActionButton()
+        alreadyRestedActionButton()
             .padding(.top, 8)
 
         Spacer().frame(height: 24)
@@ -424,8 +424,8 @@ struct BreakCardView: View {
         // Tight pair: on the fullscreen shield the parent VStack's 20pt spacing
         // would read as two unrelated tiers rather than one row of exits.
         VStack(spacing: 10) {
-            alreadyRestedActionButton()
             skipActionButton()
+            alreadyRestedActionButton()
         }
     }
 
