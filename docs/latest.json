@@ -1,17 +1,17 @@
 {
-  "version": "1.6.29",
-  "notes_zh": "## HealthTick v1.6.29\n\n### ✨ 改进\n- 应用内更新全面改造：更新源迁移至国内可直连的站点，无需代理也能快速下载；下载失败自动切换 Gitee / GitHub 备用源\n- 更新包下载后自动校验完整性（大小 + SHA-256），防止安装损坏的安装包\n\n### 🐞 Bug 修复\n- 修复「点击更新」按钮无响应的问题：更新弹窗关闭后，再次点击现在能正常重新打开\n- 修复无代理环境下更新下载进度长时间停滞的问题",
+  "version": "1.6.30",
+  "notes_zh": "## HealthTick v1.6.30\n\n### ✨ 新增功能\n- 休息提醒新增「☕️ 我已提前休息」：提前离开工位休息过了，回来被提醒时可以直接补记为完成 —— 计入今日休息次数和连续打卡，不增加跳过次数（感谢 @butfool 贡献 #38）\n\n### 🐞 Bug 修复\n- 修复设置窗口底部被 Dock 遮住的问题（#37）：窗口高度不再随内容无限增长，超出屏幕的部分改为滚动查看（打开「同步国家节假日」后最容易撞上）",
   "notes_en": "",
   "downloads": {
     "Apple-Silicon": {
-      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.29-Apple-Silicon.dmg",
-      "size": 2666416,
-      "sha256": "e2209ed5b5fd9ace9a2df3555a7afc4cee26feaabb13384f0e9cf30fdb2c806d"
+      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.30-Apple-Silicon.dmg",
+      "size": 2669425,
+      "sha256": "b47191f84f61361d08e8ea3ef93733a9e46a12e4000a2d47a922ee0969fea600"
     },
     "Intel": {
-      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.29-Intel.dmg",
-      "size": 2730411,
-      "sha256": "740fa40ff22fba4d3d683329160fec3ce3c235e33f58f2efc51e1983b85af794"
+      "url": "https://www.lifedever.com/health-tick-release/downloads/HealthTick-v1.6.30-Intel.dmg",
+      "size": 2734712,
+      "sha256": "5c2385b43719b28fbf29dadd4e82b744970c77ee438f20f99909b1ee193388ed"
     }
   }
 }
