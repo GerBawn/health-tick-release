@@ -48,6 +48,8 @@ struct L {
     static var resume: String { isZh ? "继续" : "Resume" }
     static var resetAction: String { isZh ? "重置" : "Reset" }
     static var manualBreak: String { isZh ? "去休息" : "Break" }
+    /// 工作阶段：已经休息过了，跳过本次休息直接开始下一段工作
+    static var manualNextWork: String { isZh ? "已休息" : "Already rested" }
     static var achievements: String { isZh ? "成就" : "Stats" }
     static var help: String { isZh ? "帮助" : "Help" }
     static var settings: String { isZh ? "设置" : "Settings" }
@@ -114,6 +116,8 @@ struct L {
     static var phaseSnoozed: String { isZh ? "已延后提醒" : "Snoozed" }
     static var breakOverReturnPrompt: String { isZh ? "休息结束啦！准备好继续工作了吗？" : "Break is over! Ready to get back to work?" }
     static var alertImBack: String { isZh ? "我回来了" : "I'm back" }
+    /// 休息阶段：提前结束休息并记为已完成（区别于跳过）
+    static var breakRestedDone: String { isZh ? "已休息" : "Done resting" }
 
     // MARK: - Settings - Tabs
     static var tabGeneral: String { isZh ? "通用" : "General" }

@@ -212,19 +212,35 @@ private struct MenuTimerCircle: View {
                     Text(state.formattedTime)
                         .font(.system(size: 28, weight: .light, design: .monospaced))
                     if state.phase == .working {
-                        Button {
-                            state.manualBreak()
-                        } label: {
-                            HStack(spacing: 3) {
-                                Image(systemName: "cup.and.saucer.fill")
-                                    .font(.system(size: 10))
-                                Text(L.manualBreak)
-                                    .font(.system(size: 11, weight: .medium))
+                        HStack(spacing: 10) {
+                            Button {
+                                state.manualBreak()
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "cup.and.saucer.fill")
+                                        .font(.system(size: 10))
+                                    Text(L.manualBreak)
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundStyle(.primary.opacity(0.5))
                             }
-                            .foregroundStyle(.primary.opacity(0.5))
+                            .buttonStyle(.borderless)
+                            .handCursor()
+
+                            Button {
+                                state.skipToNextWork()
+                            } label: {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "arrow.forward.circle.fill")
+                                        .font(.system(size: 10))
+                                    Text(L.manualNextWork)
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundStyle(.green.opacity(0.8))
+                            }
+                            .buttonStyle(.borderless)
+                            .handCursor()
                         }
-                        .buttonStyle(.borderless)
-                        .handCursor()
                     } else if state.phase == .waiting {
                         // Break is over, waiting for the user to confirm return.
                         // This is a dead-end with no auto-exit — the confirm

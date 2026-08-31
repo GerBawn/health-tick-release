@@ -905,6 +905,54 @@ final class AppState {
         }
     }
 
+    /// 休息阶段提前结束：用户在倒计时结束前已经休息够了，主动结束休息并
+    /// 直接开始下一段工作。区别于 forceEndBreak（三连击跳过）：本次休息
+    /// 记为「已完成」（skipped=false），计入当日完成次数、连续天数与长休
+    /// 息轮次，不增加跳过计数。用于「检测到操作倒计时暂停」时用户其实
+    /// 已经休息过、却只能点跳过的窘境（issue：休息页没有「已休息」入口）。
+    func confirmRested() {
+        guard phase == .breaking else { return }
+        timer?.invalidate()
+        cancelAlertSoundBurst()
+        breakWarning = ""
+        overlayManager.hide()
+
+        let actualSeconds: Int?
+        if let start = breakStartDate {
+            actualSeconds = Int(Date().timeIntervalSince(start))
+        } else {
+            actualSeconds = nil
+        }
+        if let sid = currentSessionId {
+            db.endSessionBreak(sessionId: sid, actualSeconds: actualSeconds, skipped: false)
+        }
+
+        completedCycles += 1
+
+        let oldStreak = maxStreak
+        let oldTotal = totalCount
+        db.addRecord()
+        refreshStats()
+        let badge = detectNewBadge(oldStreak: oldStreak, oldTotal: oldTotal)
+
+        if config.autoPauseOnGoal && todayDone >= config.dailyGoal {
+            currentSessionId = nil
+            goalAutoStopped = true
+            phase = .paused
+            remainingSeconds = 0
+            timer?.invalidate()
+            saveTimerState()
+        } else {
+            startWork()
+        }
+
+        if let badge {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.showBadgeCelebration(badge)
+            }
+        }
+    }
+
     func confirmReturn() {
         overlayManager.hide()
         let badge = pendingBadge
@@ -962,6 +1010,49 @@ final class AppState {
         }
 
         startBreak()
+    }
+
+    /// 工作阶段提前结束：用户在计时结束前已经自行休息过，跳过本次休息，
+    /// 直接开始下一段工作。已工作的工时照常入库，并把这次休息按「正常完成」
+    /// 记录入库（skipped=false + 一条 records 记录），计入当日完成次数、
+    /// 连续天数与长休息轮次——与正常 工作→休息→完成 流程的计数完全一致，
+    /// 不增加跳过计数。若达标且开启了「完成目标后自动停止」则进入暂停态。
+    func skipToNextWork() {
+        guard phase == .working else { return }
+        timer?.invalidate()
+        cancelAlertSoundBurst()
+
+        let oldStreak = maxStreak
+        let oldTotal = totalCount
+
+        if let sid = currentSessionId {
+            db.endWork(sessionId: sid)
+            // 这轮已工作时长由 work_end 入库；休息发生在应用外，时长未知
+            // （nil，不是 0——0 表示「没休息」）。记为完成、不记跳过。
+            db.startSessionBreak(sessionId: sid)
+            db.endSessionBreak(sessionId: sid, actualSeconds: nil, skipped: false)
+        }
+        completedCycles += 1
+        db.addRecord()
+        currentSessionId = nil
+        refreshStats()
+        let badge = detectNewBadge(oldStreak: oldStreak, oldTotal: oldTotal)
+
+        if config.autoPauseOnGoal && todayDone >= config.dailyGoal {
+            goalAutoStopped = true
+            phase = .paused
+            remainingSeconds = 0
+            timer?.invalidate()
+            saveTimerState()
+        } else {
+            startWork()
+        }
+
+        if let badge {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.showBadgeCelebration(badge)
+            }
+        }
     }
 
     func reset() {
@@ -1524,7 +1615,7 @@ final class AppState {
             isInQuietHours = false
             stopQuietCountdown()
             autoQuietPaused = false
-    
+
             startWork()
         }
 

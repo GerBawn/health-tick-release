@@ -358,6 +358,25 @@ struct BreakCardView: View {
         .padding(.top, 14)
 
         Button {
+            state.confirmRested()
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 12))
+                Text(L.breakRestedDone)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .foregroundStyle(.green)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .background(.green.opacity(0.12), in: Capsule())
+        }
+        .disabled(state.isPreview)
+        .buttonStyle(.plain)
+        .handCursor()
+        .padding(.top, 10)
+
+        Button {
             state.skipBreakClicked()
         } label: {
             Text(L.skipButton(state.breakSkipCount, state.breakSkipNeeded))
@@ -369,7 +388,7 @@ struct BreakCardView: View {
         .disabled(state.isPreview)
         .buttonStyle(.borderless)
         .handCursor()
-        .padding(.top, 14)
+        .padding(.top, 6)
 
         Spacer().frame(height: 10)
     }
@@ -485,6 +504,24 @@ struct BreakCardView: View {
             .padding(.vertical, 6)
             .background(.orange.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
         }
+
+        Button {
+            state.confirmRested()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                Text(L.breakRestedDone)
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 10)
+            .background(.green.gradient, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .disabled(state.isPreview)
+        .buttonStyle(.plain)
+        .handCursor()
 
         Button {
             state.skipBreakClicked()
